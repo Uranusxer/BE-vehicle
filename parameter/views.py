@@ -1,16 +1,12 @@
 import json
 from django.http import HttpRequest
 from parameter.models import Site,Goods,Vehicle,Pay,Site2owner
-from django.contrib.auth.hashers import check_password
 from utils.utils_request import BAD_METHOD, request_failed, request_success
 from utils.utils_require import CheckRequire, require
 from utils.utils_time import get_timestamp
-from utils.utils_jwt import generate_jwt_token
-from utils.utils_format import check_string_format
-from utils.constants import OFFLINE,CANCELED
 from django.core.paginator import Paginator
 from user.models import User,get_user_from_request
-from utils.constants import SITE_TYPE,START,END
+from utils.constants import START,END
 
 
 # Create your views here.
