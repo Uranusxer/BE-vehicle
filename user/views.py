@@ -23,7 +23,7 @@ def login(req: HttpRequest):
     if user:
         if check_password(password, user.password):
             user.set_login()
-            access_token = generate_jwt_token(username)
+            access_token = generate_jwt_token(user.id)
             return_data = {
                 "token":access_token,
                 "username":user.name,
