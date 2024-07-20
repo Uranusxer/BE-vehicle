@@ -17,8 +17,6 @@ class Site(models.Model):
             "name":self.name,
             "manager":self.manager,
             "manager_phone":self.manager_phone,
-            "owner":self.owner,
-            "owner_phone":self.owner_phone,
             "created_time":self.created_time
         }
         return data     

@@ -27,12 +27,10 @@ def start_site(req:HttpRequest):
     return request_success()
 
 @CheckRequire
-def del_start_site(req:HttpRequest):
+def del_start_site(req:HttpRequest,site_id):
     failure_response, user = get_user_from_request(req,'DELETE')
     if failure_response:
         return failure_response
-    body = json.loads(req.body.decode("utf-8"))
-    site_id = require(body,"id","int",err_msg="Missing or error type of [id]")
     site = Site.objects.filter(id=site_id).first()
     if not site:
         return request_failed(code=1,info="Site does not exist",status_code=404)
@@ -48,7 +46,8 @@ def start_site_list(req:HttpRequest,per_page,page):
     paginator = Paginator(site_list,per_page)
     site_page = paginator.get_page(page)
     return_data = [site.serialize() for site in site_page]
-    return request_success({"start_sites":return_data})
+    total_pages = paginator.num_pages
+    return request_success({"start_sites":return_data,"total_pages":total_pages})
 
 # Create your views here.
 @CheckRequire
@@ -68,12 +67,10 @@ def end_site(req:HttpRequest):
     return request_success()
 
 @CheckRequire
-def del_end_site(req:HttpRequest):
+def del_end_site(req:HttpRequest,site_id):
     failure_response, user = get_user_from_request(req,'DELETE')
     if failure_response:
         return failure_response
-    body = json.loads(req.body.decode("utf-8"))
-    site_id = require(body,"id","int",err_msg="Missing or error type of [id]")
     site = Site.objects.filter(id=site_id).first()
     if not site:
         return request_failed(code=1,info="Site does not exist",status_code=404)
@@ -89,7 +86,9 @@ def end_site_list(req:HttpRequest,per_page,page):
     paginator = Paginator(site_list,per_page)
     site_page = paginator.get_page(page)
     return_data = [site.serialize() for site in site_page]
-    return request_success({"start_sites":return_data})
+    total_pages = paginator.num_pages
+    return request_success({"end_sites":return_data,"total_pages":total_pages})
+
 
 
 @CheckRequire
@@ -103,12 +102,10 @@ def new_goods(req:HttpRequest):
     return request_success()
 
 @CheckRequire
-def del_goods(req:HttpRequest):
+def del_goods(req:HttpRequest,goods_id):
     failure_response, user = get_user_from_request(req,'DELETE')
     if failure_response:
         return failure_response
-    body = json.loads(req.body.decode("utf-8"))
-    goods_id = require(body,"id","int",err_msg="Missing or error type of [id]")
     goods = Goods.objects.filter(id=goods_id).first()
     if not goods:
         return request_failed(code=1,info="Goods does not exist",status_code=404)
@@ -124,7 +121,8 @@ def goods_list(req:HttpRequest,per_page,page):
     paginator = Paginator(goods_list,per_page)
     goods_page = paginator.get_page(page)
     return_data = [goods.serialize() for goods in goods_page]
-    return request_success({"goods":return_data})
+    total_pages = paginator.num_pages
+    return request_success({"goods":return_data,"total_pages":total_pages})
 
 @CheckRequire
 def new_vehicle(req:HttpRequest):
@@ -140,12 +138,10 @@ def new_vehicle(req:HttpRequest):
     return request_success()
 
 @CheckRequire
-def del_vehicle(req:HttpRequest):
+def del_vehicle(req:HttpRequest,vehicle_id):
     failure_response, user = get_user_from_request(req,'DELETE')
     if failure_response:
         return failure_response
-    body = json.loads(req.body.decode("utf-8"))
-    vehicle_id = require(body,"id","int",err_msg="Missing or error type of [id]")
     vehicle = Vehicle.objects.filter(id=vehicle_id).first()
     if not vehicle:
         return request_failed(code=1,info="Vehicle does not exist",status_code=404)
@@ -161,7 +157,8 @@ def vehicle_list(req:HttpRequest,per_page,page):
     paginator = Paginator(vehicle_list,per_page)
     vehicle_page = paginator.get_page(page)
     return_data = [vehicle.serialize() for vehicle in vehicle_page]
-    return request_success({"vehicle":return_data})
+    total_pages = paginator.num_pages
+    return request_success({"vehicle":return_data,"total_pages":total_pages})
 
 @CheckRequire
 def new_site2owner(req:HttpRequest):
@@ -180,12 +177,10 @@ def new_site2owner(req:HttpRequest):
     return request_success()
 
 @CheckRequire
-def del_site2owner(req:HttpRequest):
+def del_site2owner(req:HttpRequest,site2owner_id):
     failure_response, user = get_user_from_request(req,'DELETE')
     if failure_response:
         return failure_response
-    body = json.loads(req.body.decode("utf-8"))
-    site2owner_id = require(body,"id","int",err_msg="Missing or error type of [id]")
     site2owner = Site2owner.objects.filter(id=site2owner_id).first()
     if not site2owner:
         return request_failed(code=1,info="Site2owner does not exist",status_code=404)
@@ -201,7 +196,8 @@ def site2owner_list(req:HttpRequest,per_page,page):
     paginator = Paginator(site2owner_list,per_page)
     site2owner_page = paginator.get_page(page)
     return_data = [site2owner.serialize() for site2owner in site2owner_page]
-    return request_success({"site2owner":return_data})
+    total_pages = paginator.num_pages
+    return request_success({"site2owner":return_data,"total_pages":total_pages})
 
 @CheckRequire
 def owner2site(req:HttpRequest,per_page,page):
@@ -239,12 +235,10 @@ def new_pay(req:HttpRequest):
     return request_success()
 
 @CheckRequire
-def del_pay(req:HttpRequest):
+def del_pay(req:HttpRequest,pay_id):
     failure_response, user = get_user_from_request(req,'DELETE')
     if failure_response:
         return failure_response
-    body = json.loads(req.body.decode("utf-8"))
-    pay_id = require(body,"id","int",err_msg="Missing or error type of [id]")
     pay = Pay.objects.filter(id=pay_id).first()
     if not pay:
         return request_failed(code=1,info="Pay does not exist",status_code=404)
@@ -260,4 +254,5 @@ def pay_list(req:HttpRequest,per_page,page):
     paginator = Paginator(pay_list,per_page)
     pay_page = paginator.get_page(page)
     return_data = [pay.serialize() for pay in pay_page]
-    return request_success({"pay":return_data})
+    total_pages = paginator.num_pages
+    return request_success({"pay":return_data,"total_pages":total_pages})
