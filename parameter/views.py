@@ -1,7 +1,7 @@
 import json
 from django.http import HttpRequest
 from parameter.models import Site,Goods,Vehicle,Pay,Site2owner
-from utils.utils_request import BAD_METHOD, request_failed, request_success
+from utils.utils_request import request_failed, request_success
 from utils.utils_require import CheckRequire, require
 from utils.utils_time import get_timestamp
 from django.core.paginator import Paginator
@@ -34,7 +34,7 @@ def del_start_site(req:HttpRequest,site_id):
     site = Site.objects.filter(id=site_id).first()
     if not site:
         return request_failed(code=1,info="Site does not exist",status_code=404)
-    Site.objects.delete(site)
+    site.if_delete=True
     return request_success()
 
 @CheckRequire
@@ -42,7 +42,7 @@ def start_site_list(req:HttpRequest,per_page,page):
     failure_response, user = get_user_from_request(req,'GET')
     if failure_response:
         return failure_response
-    site_list = Site.objects.filter(type=START).order_by("-created_time")
+    site_list = Site.objects.filter(type=START,if_delete=False).order_by("-created_time")
     paginator = Paginator(site_list,per_page)
     site_page = paginator.get_page(page)
     return_data = [site.serialize() for site in site_page]
@@ -74,7 +74,7 @@ def del_end_site(req:HttpRequest,site_id):
     site = Site.objects.filter(id=site_id).first()
     if not site:
         return request_failed(code=1,info="Site does not exist",status_code=404)
-    Site.objects.delete(site)
+    site.if_delete=True
     return request_success()
 
 @CheckRequire
@@ -82,7 +82,7 @@ def end_site_list(req:HttpRequest,per_page,page):
     failure_response, user = get_user_from_request(req,'GET')
     if failure_response:
         return failure_response
-    site_list = Site.objects.filter(type=END).order_by("-created_time")
+    site_list = Site.objects.filter(type=END,if_delete=False).order_by("-created_time")
     paginator = Paginator(site_list,per_page)
     site_page = paginator.get_page(page)
     return_data = [site.serialize() for site in site_page]
@@ -109,7 +109,7 @@ def del_goods(req:HttpRequest,goods_id):
     goods = Goods.objects.filter(id=goods_id).first()
     if not goods:
         return request_failed(code=1,info="Goods does not exist",status_code=404)
-    Goods.objects.delete(goods)
+    goods.if_delete=True
     return request_success()
 
 @CheckRequire
@@ -117,7 +117,7 @@ def goods_list(req:HttpRequest,per_page,page):
     failure_response, user = get_user_from_request(req,'GET')
     if failure_response:
         return failure_response
-    goods_list = Goods.objects.all().order_by("-created_time")
+    goods_list = Goods.objects.filter(if_delete=False).order_by("-created_time")
     paginator = Paginator(goods_list,per_page)
     goods_page = paginator.get_page(page)
     return_data = [goods.serialize() for goods in goods_page]
@@ -145,7 +145,7 @@ def del_vehicle(req:HttpRequest,vehicle_id):
     vehicle = Vehicle.objects.filter(id=vehicle_id).first()
     if not vehicle:
         return request_failed(code=1,info="Vehicle does not exist",status_code=404)
-    Vehicle.objects.delete(vehicle)
+    vehicle.if_delete=True
     return request_success()
 
 @CheckRequire
@@ -153,7 +153,7 @@ def vehicle_list(req:HttpRequest,per_page,page):
     failure_response, user = get_user_from_request(req,'GET')
     if failure_response:
         return failure_response
-    vehicle_list = Vehicle.objects.all().order_by("-created_time")
+    vehicle_list = Vehicle.objects.filter(if_delete=False).order_by("-created_time")
     paginator = Paginator(vehicle_list,per_page)
     vehicle_page = paginator.get_page(page)
     return_data = [vehicle.serialize() for vehicle in vehicle_page]
@@ -184,7 +184,7 @@ def del_site2owner(req:HttpRequest,site2owner_id):
     site2owner = Site2owner.objects.filter(id=site2owner_id).first()
     if not site2owner:
         return request_failed(code=1,info="Site2owner does not exist",status_code=404)
-    Site2owner.objects.delete(site2owner)
+    site2owner.if_delete=True
     return request_success()
 
 @CheckRequire
@@ -192,7 +192,7 @@ def site2owner_list(req:HttpRequest,per_page,page):
     failure_response, user = get_user_from_request(req,'GET')
     if failure_response:
         return failure_response
-    site2owner_list = Site2owner.objects.all().order_by("-created_time")
+    site2owner_list = Site2owner.objects.filter(if_delete=False).order_by("-created_time")
     paginator = Paginator(site2owner_list,per_page)
     site2owner_page = paginator.get_page(page)
     return_data = [site2owner.serialize() for site2owner in site2owner_page]
@@ -207,7 +207,7 @@ def owner2site(req:HttpRequest,per_page,page):
     ownerName = req.GET.get('ownerName', None)
     if not ownerName:
         return request_failed(code=1,info="Owner name not found in the request",status_code=400)
-    site2owner_list = Site2owner.objects.filter(owner=ownerName).order_by("-created_time")
+    site2owner_list = Site2owner.objects.filter(owner=ownerName,if_delete=False).order_by("-created_time")
     paginator = Paginator(site2owner_list,per_page)
     site2owner_page = paginator.get_page(page)
     return_data = [site2owner.serialize() for site2owner in site2owner_page]
@@ -242,7 +242,7 @@ def del_pay(req:HttpRequest,pay_id):
     pay = Pay.objects.filter(id=pay_id).first()
     if not pay:
         return request_failed(code=1,info="Pay does not exist",status_code=404)
-    Pay.objects.delete(pay)
+    pay.if_delete=True
     return request_success()
 
 @CheckRequire
@@ -250,7 +250,7 @@ def pay_list(req:HttpRequest,per_page,page):
     failure_response, user = get_user_from_request(req,'GET')
     if failure_response:
         return failure_response
-    pay_list = Pay.objects.all().order_by("-created_time")
+    pay_list = Pay.objects.filter(if_delete=False).order_by("-created_time")
     paginator = Paginator(pay_list,per_page)
     pay_page = paginator.get_page(page)
     return_data = [pay.serialize() for pay in pay_page]
