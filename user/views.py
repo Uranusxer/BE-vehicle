@@ -62,9 +62,9 @@ def signup(req:HttpRequest): # 注册
 
 @CheckRequire
 def logout(req: HttpRequest):
-    failure_response, user = get_user_from_request(req,'POST')
-    if failure_response:
-        return failure_response
+    # failure_response, user = get_user_from_request(req,'POST')
+    # if failure_response:
+    #     return failure_response
     user.status = OFFLINE
     return request_success()    
 
@@ -79,9 +79,9 @@ def cancel(req: HttpRequest):
 
 @CheckRequire
 def change_password(req:HttpRequest):
-    failure_response, user = get_user_from_request(req,'POST')
-    if failure_response:
-        return failure_response
+    # failure_response, user = get_user_from_request(req,'POST')
+    # if failure_response:
+    #     return failure_response
     body = json.loads(req.body.decode("utf-8"))
     oldPassword = require(body, "oldPassword", "string", err_msg="Missing or error type of [oldPassword]")
     newPassword = require(body, "newPassword", "string", err_msg="Missing or error type of [newPassword]")
@@ -93,9 +93,9 @@ def change_password(req:HttpRequest):
 
 @CheckRequire
 def info(req:HttpRequest):
-    failure_response, user = get_user_from_request(req,'GET','POST')
-    if failure_response:
-        return failure_response
+    # failure_response, user = get_user_from_request(req,'GET','POST')
+    # if failure_response:
+    #     return failure_response
     if req.method == 'POST':
         body = json.loads(req.body.decode("utf-8"))
         try:

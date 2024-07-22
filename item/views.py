@@ -11,13 +11,13 @@ import json
 
 @CheckRequire
 def transport_item(req:HttpRequest):
-    failure_response, user = get_user_from_request(req,'POST')
-    if failure_response:
-        return failure_response
+    # failure_response, user = get_user_from_request(req,'POST')
+    # if failure_response:
+    #     return failure_response
     body = json.loads(req.body.decode("utf-8"))
     startsite_id = require(body,"startsite_id","int",err_msg="Missing or error type of [startsite_id]")
     endsite_id = require(body,"endsite_id","int",err_msg="Missing or error type of [endsite_id]")
-    vehicle_id  = require(body,"vehicle_id ","int",err_msg="Missing or error type of [vehicle_id ]")
+    vehicle_id  = require(body,"vehicle_id","int",err_msg="Missing or error type of [vehicle_id]")
     goods_id = require(body,"goods_id","int",err_msg="Missing or error type of [goods_id]")
     start_date = require(body,"start_date","string",err_msg="Missing or error type of [start_date]")
     end_date = require(body,"end_date","string",err_msg="Missing or error type of [end_date]")
@@ -26,9 +26,9 @@ def transport_item(req:HttpRequest):
 
 @CheckRequire
 def del_item(req:HttpRequest,item_id):
-    failure_response, user = get_user_from_request(req,'DELETE')
-    if failure_response:
-        return failure_response
+    # failure_response, user = get_user_from_request(req,'DELETE')
+    # if failure_response:
+    #     return failure_response
     item = Item.objects.filter(id=item_id).first()
     if not item:
         return request_failed(code=1,info="Item does not exist",status_code=404)
@@ -37,9 +37,9 @@ def del_item(req:HttpRequest,item_id):
 
 @CheckRequire
 def item_list(req:HttpRequest,per_page,page):
-    failure_response, user = get_user_from_request(req,'GET')
-    if failure_response:
-        return failure_response
+    # failure_response, user = get_user_from_request(req,'GET')
+    # if failure_response:
+    #     return failure_response
     item_list = Item.objects.filter(if_delete=False).order_by("-created_time")
     paginator = Paginator(item_list,per_page)
     item_page = paginator.get_page(page)
@@ -49,9 +49,9 @@ def item_list(req:HttpRequest,per_page,page):
 
 @CheckRequire
 def item_price(req:HttpRequest):
-    failure_response, user = get_user_from_request(req,'POST')
-    if failure_response:
-        return failure_response
+    # failure_response, user = get_user_from_request(req,'POST')
+    # if failure_response:
+    #     return failure_response
     body = json.loads(req.body.decode("utf-8"))
     item_id = require(body,"item_id  ","int",err_msg="Missing or error type of [item_id]")
     contractorPrice = require(body,"contractorPrice ","float",err_msg="Missing or error type of [contractorPrice]")

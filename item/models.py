@@ -23,10 +23,10 @@ class Item(models.Model):
     if_delete = models.BooleanField(default=False)
 
     def serialize(self):
-        start_site = Site.objects.get(id=self.startsite_id) if self.startsite_id else None
-        end_site = Site.objects.get(id=self.endsite_id) if self.endsite_id else None
-        vehicle = Vehicle.objects.get(id=self.vehicle_id) if self.vehicle_id else None
-        goods = Goods.objects.get(id=self.goods_id) if self.goods_id else None
+        start_site = Site.objects.filter(id=self.startsite_id).save()
+        end_site = Site.objects.filter(id=self.endsite_id).save()
+        vehicle = Vehicle.objects.filter(id=self.vehicle_id).save()
+        goods = Goods.objects.filter(id=self.goods_id).save()
         data = {
             "id":self.id,
             "startsite":start_site.serialize() if start_site else None,
