@@ -1,6 +1,6 @@
 import json
 from django.http import HttpRequest
-from parameter.models import Site,Goods,Vehicle,Pay,Site2owner
+from parameter.models import Site,Goods,Vehicle,Pay
 from utils.utils_request import request_failed, request_success
 from utils.utils_require import CheckRequire, require
 from utils.utils_time import get_timestamp
@@ -91,7 +91,51 @@ def end_site_list(req:HttpRequest,per_page,page):
     total_pages = paginator.num_pages
     return request_success({"end_sites":return_data,"total_pages":total_pages})
 
+@CheckRequire
+def change_site(req:HttpRequest):
+    # failure_response, user = get_user_from_request(req,'POST')
+    # if failure_response:
+    #     return failure_response
+    body = json.loads(req.body.decode("utf-8"))
+    site_id = require(body,"site_id","int",err_msg="Missing or error type of [site_id]")
+    site = Site.objects.filter(id=site_id).first()
+    if not site:
+        return request_failed(code=1,info="Site does not exist",status_code=404)
+    try:
+        name = require(body, "name", "string", err_msg="Missing or error type of [name]")
+    except:
+        name = None
+    try:
+        manager = require(body, "manager", "string", err_msg="Missing or error type of [manager]")
+    except:
+        manager = None
+    try:
+        manager_phone = require(body, "manager_phone", "string", err_msg="Missing or error type of [manager_phone]")
+        manager_phone = int(manager_phone)
+    except:
+        manager_phone = None
+    try:
+        owner = require(body, "owner", "string", err_msg="Missing or error type of [owner]")
+    except:
+        owner = None
+    try:
+        owner_phone = require(body, "owner_phone", "string", err_msg="Missing or error type of [owner_phone]")
+        owner_phone = int(owner_phone)
+    except:
+        owner_phone = None
 
+    if name:
+        site.name = name
+    if manager:
+        site.manager = manager
+    if manager_phone:
+        site.manager_phone = manager_phone
+    if owner:
+        site.owner = owner
+    if owner_phone:
+        site.owner_phone = owner_phone
+    site.save()
+    return request_success()
 
 @CheckRequire
 def new_goods(req:HttpRequest):
@@ -126,6 +170,26 @@ def goods_list(req:HttpRequest,per_page,page):
     return_data = [goods.serialize() for goods in goods_page]
     total_pages = paginator.num_pages
     return request_success({"goods":return_data,"total_pages":total_pages})
+
+@CheckRequire
+def change_goods(req:HttpRequest):
+    # failure_response, user = get_user_from_request(req,'POST')
+    # if failure_response:
+    #     return failure_response
+    body = json.loads(req.body.decode("utf-8"))
+    goods_id = require(body,"goods_id","int",err_msg="Missing or error type of [goods_id]")
+    goods = Goods.objects.filter(id=goods_id).first()
+    if not goods:
+        return request_failed(code=1,info="Goods does not exist",status_code=404)
+    try:
+        name = require(body, "name", "string", err_msg="Missing or error type of [name]")
+    except:
+        name = None
+    if name:
+        goods.name = name
+    goods.save()
+    return request_success()
+
 
 @CheckRequire
 def new_vehicle(req:HttpRequest):
@@ -165,19 +229,56 @@ def vehicle_list(req:HttpRequest,per_page,page):
     return request_success({"vehicle":return_data,"total_pages":total_pages})
 
 @CheckRequire
+def change_vehicle(req:HttpRequest):
+    # failure_response, user = get_user_from_request(req,'POST')
+    # if failure_response:
+    #     return failure_response
+    body = json.loads(req.body.decode("utf-8"))
+    vehicle_id = require(body,"vehicle_id","int",err_msg="Missing or error type of [vehicle_id]")
+    vehicle = Vehicle.objects.filter(id=vehicle_id).first()
+    if not vehicle:
+        return request_failed(code=1,info="Vehicle does not exist",status_code=404)
+    try:
+        driver = require(body, "driver", "string", err_msg="Missing or error type of [driver]")
+    except:
+        driver = None
+    try:
+        license = require(body, "license", "string", err_msg="Missing or error type of [license]")
+    except:
+        license = None
+    try:
+        phone = require(body, "phone", "string", err_msg="Missing or error type of [phone]")
+        phone = int(phone)
+    except:
+        phone = None
+    if driver:
+        vehicle.driver = driver
+    if license:
+        vehicle.license = license
+    if phone:
+        vehicle.phone = phone
+    vehicle.save()
+    return request_success()
+
+@CheckRequire
 def new_site2owner(req:HttpRequest):
     # failure_response, user = get_user_from_request(req,'POST')
     # if failure_response:
     #     return failure_response
     body = json.loads(req.body.decode("utf-8")) 
-    name = require(body,"siteName","string",err_msg="Missing or error type of [siteName]")
+    site_id = require(body,"site_id","int",err_msg="Missing or error type of [site_id]")
     owner = require(body,"ownerName","string",err_msg="Missing or error type of [ownerName]")
     phone_str = require(body,"phone","string",err_msg="Missing or error type of [phone]")
     try:
         phone = int(phone_str)
     except ValueError:
         return request_failed(code=1,info="Phone number must be in numeric format",status_code=400)
-    Newsite2owner = Site2owner.objects.create(name=name,owner=owner,phone=phone,created_time=get_timestamp())
+    site = Site.objects.filter(id=site_id).first()
+    if not site:
+        return request_failed(code=1,info="Site does not exist",status_code=404)
+    site.owner = owner
+    site.owner_phone = phone
+    site.save()
     return request_success()
 
 @CheckRequire
@@ -185,24 +286,25 @@ def del_site2owner(req:HttpRequest,site2owner_id):
     # failure_response, user = get_user_from_request(req,'DELETE')
     # if failure_response:
     #     return failure_response
-    site2owner = Site2owner.objects.filter(id=site2owner_id).first()
-    if not site2owner:
-        return request_failed(code=1,info="Site2owner does not exist",status_code=404)
-    site2owner.if_delete=True
-    site2owner.save()
+    site = Site.objects.filter(id=site2owner_id).first()
+    if not site:
+        return request_failed(code=1,info="Site does not exist",status_code=404)
+    site.owner = None
+    site.owner_phone = None
+    site.save()
     return request_success()
 
 @CheckRequire
-def site2owner_list(req:HttpRequest,per_page,page):
+def site_list(req:HttpRequest,per_page,page):
     # failure_response, user = get_user_from_request(req,'GET')
     # if failure_response:
     #     return failure_response
-    site2owner_list = Site2owner.objects.filter(if_delete=False).order_by("-created_time")
-    paginator = Paginator(site2owner_list,per_page)
-    site2owner_page = paginator.get_page(page)
-    return_data = [site2owner.serialize() for site2owner in site2owner_page]
+    site_list = Site.objects.filter(if_delete=False).order_by("-created_time")
+    paginator = Paginator(site_list,per_page)
+    site_page = paginator.get_page(page)
+    return_data = [site.serialize() for site in site_page]
     total_pages = paginator.num_pages
-    return request_success({"site2owner":return_data,"total_pages":total_pages})
+    return request_success({"site":return_data,"total_pages":total_pages})
 
 @CheckRequire
 def owner2site(req:HttpRequest,per_page,page):
@@ -212,22 +314,12 @@ def owner2site(req:HttpRequest,per_page,page):
     ownerName = req.GET.get('ownerName', None)
     if not ownerName:
         return request_failed(code=1,info="Owner name not found in the request",status_code=400)
-    site2owner_list = Site2owner.objects.filter(owner=ownerName,if_delete=False).order_by("-created_time")
-    paginator = Paginator(site2owner_list,per_page)
-    site2owner_page = paginator.get_page(page)
-    return_data = [site2owner.serialize() for site2owner in site2owner_page]
-    return request_success({"site2owner":return_data})
+    site_list = Site.objects.filter(owner=ownerName,if_delete=False).order_by("-created_time")
+    paginator = Paginator(site_list,per_page)
+    site_page = paginator.get_page(page)
+    return_data = [site.serialize() for site in site_page]
+    return request_success({"site":return_data})
 
-@CheckRequire
-def site2owner(req:HttpRequest):
-    # failure_response, user = get_user_from_request(req,'GET')
-    # if failure_response:
-    #     return failure_response
-    id = req.GET.get('id', None)
-    if not id:
-        return request_failed(code=1,info="Site2owner id not found in the request",status_code=400)
-    site2owner = Site2owner.objects.filter(id=id).first()
-    return request_success(site2owner.serialize())
 
 @CheckRequire
 def new_pay(req:HttpRequest):
@@ -262,3 +354,22 @@ def pay_list(req:HttpRequest,per_page,page):
     return_data = [pay.serialize() for pay in pay_page]
     total_pages = paginator.num_pages
     return request_success({"pay":return_data,"total_pages":total_pages})
+
+@CheckRequire
+def change_pay(req:HttpRequest):
+    # failure_response, user = get_user_from_request(req,'POST')
+    # if failure_response:
+    #     return failure_response
+    body = json.loads(req.body.decode("utf-8"))
+    pay_id = require(body,"pay_id","int",err_msg="Missing or error type of [pay_id]")
+    pay = Pay.objects.filter(id=pay_id).first()
+    if not pay:
+        return request_failed(code=1,info="Pay does not exist",status_code=404)
+    try:
+        method = require(body, "method", "string", err_msg="Missing or error type of [method]")
+    except:
+        method = None
+    if method:
+        pay.method = method
+    pay.save()
+    return request_success()
