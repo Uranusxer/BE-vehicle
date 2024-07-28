@@ -572,19 +572,21 @@ def item2excel(req: HttpRequest):
     current_row = sheet.max_row
     sheet.merge_cells(f'A{current_row}:E{current_row}')
     sheet.merge_cells(f'F{current_row}:N{current_row}')
-
+    for cell in sheet[current_row]:
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal='left', vertical='center')
     
     sheet.append(["经 营 范 围 ： 本 公 司 承 拆 土 石 方 工 程 、渣 土 、 建 筑 垃 圾 运 输 、 砂 石 料 、 柴 油 配 送 等 。"])
     current_row = sheet.max_row
     for cell in sheet[current_row]:
         cell.font = Font(bold=True)
-    sheet.append(["成 就 伙 伴 、 铸 造 品 牌 、 我 们 每 天 努 力 、 我 们 每 天 进 步 。宏 途 运 输 每 月 对 帐 单"])
+    sheet.append(["成 就 伙 伴 、 铸 造 品 牌 、 我 们 每 天 努 力 、 我 们 每 天 进 步 。"])
     centered_row = sheet.max_row
     sheet.merge_cells(f'A{centered_row}:N{centered_row}')
     # 设置该行每个单元格居中对齐
     for cell in sheet[centered_row]:
         cell.alignment = Alignment(horizontal='center', vertical='center')
-        cell.font = Font(size=16,bold=True)
+        cell.font = Font(size=14,bold=True)
 
     # # 保存到本地
     for row in sheet.iter_rows():
