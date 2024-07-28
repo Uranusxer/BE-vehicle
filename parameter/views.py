@@ -373,3 +373,20 @@ def change_pay(req:HttpRequest):
         pay.method = method
     pay.save()
     return request_success()
+
+@CheckRequire
+def owner_list(req: HttpRequest, per_page, page):
+    # failure_response, user = get_user_from_request(req, 'POST')
+    # if failure_response:
+    #     return failure_response
+
+    # 获取所有未删除的sites, 然后提取所有的不重复的owners
+    owner_list = Site.objects.filter(if_delete=False).values_list("owner", flat=True).distinct().order_by("owner")
+
+    # 分页处理
+    paginator = Paginator(owner_list, per_page)
+    owner_page = paginator.get_page(page)
+    return_data = list(owner_page)
+    total_pages = paginator.num_pages
+
+    return request_success({"owner_list": return_data, "total_pages": total_pages})

@@ -32,4 +32,6 @@ urlpatterns = [
     path('del_pay/<int:pay_id>', views.del_pay, name='del_pay'),
     path('pay_list/<int:per_page>/<int:page>', views.pay_list, name='pay_list'),
     path('change_pay', views.change_pay, name='change_pay'),
+
+    path('owner_list/<int:per_page>/<int:page>', views.owner_list,name='owner_list')
 ]
