@@ -507,7 +507,7 @@ def item2excel(req: HttpRequest):
     
     for cell in sheet[current_row]:
         cell.font = Font(bold=True)
-        cell.alignment = Alignment(horizontal='center')
+        cell.alignment = Alignment(horizontal='center', vertical='center')
 
     transport_summary = items.values(
         'start_spot',
@@ -546,7 +546,7 @@ def item2excel(req: HttpRequest):
         ]
         sheet.append(row)
         current_row = sheet.max_row
-        sheet.merge_cells(f'A{current_row}:B{current_row}')
+        # sheet.merge_cells(f'A{current_row}:B{current_row}')
         sheet.merge_cells(f'D{current_row}:E{current_row}')
         sheet.merge_cells(f'G{current_row}:H{current_row}')
 
