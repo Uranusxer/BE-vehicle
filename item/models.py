@@ -17,12 +17,12 @@ class Item(models.Model):
     start_date = models.CharField(max_length=MAX_CHAR_LENGTH)
     end_date = models.CharField(max_length=MAX_CHAR_LENGTH)
     unit = models.CharField(max_length=MAX_CHAR_LENGTH, choices=UNIT_CHOICES, default='time')
-    quantity = models.FloatField(default=0.0)
-    contractorPrice = models.FloatField(default=0.0)
-    startSubsidy = models.FloatField(default=0.0)
-    endSubsidy = models.FloatField(default=0.0)
-    endPayment = models.FloatField(default=0.0)
-    driverPrice = models.FloatField(default=0.0)
+    quantity = models.FloatField(default=0)
+    contractorPrice = models.FloatField(default=0)
+    startSubsidy = models.FloatField(default=0)
+    endSubsidy = models.FloatField(default=0)
+    endPayment = models.FloatField(default=0)
+    driverPrice = models.FloatField(default=0)
     if_delete = models.BooleanField(default=False)
 
     def serialize(self):

@@ -1,6 +1,6 @@
 from django.shortcuts import render
 from item.models import Item
-from parameter.models import Site
+from parameter.models import Site,Goods,Vehicle
 from utils.utils_request import BAD_METHOD, request_failed, request_success
 from utils.utils_require import CheckRequire, require
 from utils.utils_time import get_timestamp
@@ -15,14 +15,49 @@ from datetime import datetime
 from django.http import HttpRequest, HttpResponse
 from openpyxl.styles import Alignment, Font, Border, Side
 from django.db.models import Sum
-
+import re
 
 def num2cn(n):
+    # 定义中文数字和单位
     cn_nums = ["零", "壹", "贰", "叁", "肆", "伍", "陆", "柒", "捌", "玖"]
     cn_units = ["", "拾", "佰", "仟"]
-    return "".join([cn_nums[int(digit)] + cn_units[(len(str(n))-i-1) % 4] for i, digit in enumerate(str(n))])
+    cn_decimal_units = ["角", "分"]  # 一般只取两位小数
 
+    # 将数字按小数点分开
+    if isinstance(n, float):
+        integer_part, decimal_part = str(n).split('.')
+    else:
+        integer_part, decimal_part = str(n), None
 
+    # 处理整数部分
+    int_result = "".join([
+        cn_nums[int(digit)] + (cn_units[(len(integer_part) - i - 1) % 4] if digit != '0' else '')
+        for i, digit in enumerate(integer_part)
+    ])
+
+    # 将整数部分的零零相连去掉，只保留一个零
+    int_result = re.sub('零+', '零', int_result)
+    if int_result.endswith('零'):
+        int_result = int_result[:-1]
+
+    # 处理小数部分
+    if decimal_part:
+        dec_result = ""
+        for i in range(min(len(decimal_part), 2)):  # 一般只处理到分（两位小数）
+            digit = int(decimal_part[i])
+            if digit != 0:
+                dec_result += cn_nums[digit] + cn_decimal_units[i]
+            else:
+                dec_result += cn_nums[digit]
+        dec_result = re.sub('零+', '零', dec_result).rstrip('零')
+    else:
+        dec_result = ""
+
+    # 将整数部分和小数部分组合起来
+    if dec_result:
+        return int_result + '点' + dec_result
+    else:
+        return int_result
 
 @CheckRequire
 def transport_item(req:HttpRequest):
@@ -292,16 +327,11 @@ def item_price(req: HttpRequest):
 @CheckRequire
 def item2excel(req: HttpRequest):
     # 从请求参数中获取数据
-    item_ids = req.GET.getlist('item_ids', None)
-    if not item_ids:
-        return request_failed(code=1, info="item_ids not found in the request", status_code=400)
-    
-    startsite_id = req.GET.get('startsite_id', None)
-    start_date = req.GET.get('start_date', None)
-    end_date = req.GET.get('end_date', None)
-    
-    if not startsite_id or not start_date or not end_date:
-        return request_failed(code=2, info="startsite_id, start_date and end_date are required", status_code=400)
+    body = json.loads(req.body.decode("utf-8"))
+    item_ids = require(body, "item_ids", "list", err_msg="Missing or error type of [item_ids]")
+    startsite_id = require(body, "startsite_id", "int", err_msg="Missing or error type of [startsite_id]")
+    start_date = require(body, "start_date", "string", err_msg="Missing or error type of [start_date]")
+    end_date = require(body, "end_date", "string", err_msg="Missing or error type of [end_date]")
     
     # 获取startsite对象并检查
     startsite = Site.objects.filter(id=startsite_id).first()
@@ -319,7 +349,10 @@ def item2excel(req: HttpRequest):
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "宏途运输每月对账单"
-
+    default_font = Font(size=12)
+    def set_font_and_alignment(cell):
+        cell.font = default_font
+        cell.alignment = Alignment(horizontal='center', vertical='center')
     # 设置列宽
     column_widths = {
         'A': 5,    # 序号
@@ -376,8 +409,10 @@ def item2excel(req: HttpRequest):
     sheet['G4'] = "公 司 负 责 人"
     sheet['I4'] = "叶 家 荣 19859999999"
     
-    for cell in sheet['A2:N4']:
-        cell.alignment = Alignment(horizontal='center', vertical='center')
+    for row in sheet['A2:N4']:
+        for cell in row:
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.font = Font(bold=True)
     
     # 列标题
     headers = ["序号", "起始日期", "", "运输起点", "", "终点工地", "品类", "", "数量", "单位", "单价", "终点付费金额", "起点补贴金额", "终点补贴金额"]
@@ -409,14 +444,19 @@ def item2excel(req: HttpRequest):
     
     total_amount = 0
     for idx, item in enumerate(summary, start=1):
+        end_site = Site.objects.filter(id=item['endsite_id']).first()
+        end_site_name = end_site.name if end_site else "无"
+        
+        goods = Goods.objects.filter(id=item['goods_id']).first()
+        goods_name = goods.name if goods else "无"
         row = [
             idx,
-            item['start_date'],
+            item['start_date'].split('T')[0],
             "",
             item['start_spot'],
             "",
-            Site.objects.filter(id=item['endsite_id']).first().name,
-            Goods.objects.filter(id=item['goods_id']).first().name,
+            end_site_name,
+            goods_name,
             "",
             item['quantity_sum'],
             item['unit'],
@@ -436,7 +476,7 @@ def item2excel(req: HttpRequest):
             cell.alignment = Alignment(horizontal='center', vertical='center')
 
         total_amount += item['quantity_sum'] * item['contractorPrice']
-    
+
     # 合计行
     total_cn = num2cn(total_amount)
     sheet.append(["合 计", "", "", "-", "", "-", "", "-", sum(item['quantity_sum'] for item in summary), "-", "-", "-", "-", "-"])
@@ -444,12 +484,16 @@ def item2excel(req: HttpRequest):
     sheet.merge_cells(f'A{current_row}:C{current_row}')
     sheet.merge_cells(f'D{current_row}:E{current_row}')
     sheet.merge_cells(f'G{current_row}:H{current_row}')
-    sheet.append(["总 计 金 额", "", "", total_amount, "", "总 计 大 写  ( 金 额 ）", "", "", total_cn])
+    for cell in sheet[current_row]:
+        cell.alignment = Alignment(horizontal='center')
+    sheet.append(["总 计 金 额", "", "", total_amount, "", "总 计 大 写  (金 额 )", "", "", total_cn])
     current_row = sheet.max_row
     sheet.merge_cells(f'A{current_row}:C{current_row}')
     sheet.merge_cells(f'D{current_row}:E{current_row}')
     sheet.merge_cells(f'F{current_row}:H{current_row}')
     sheet.merge_cells(f'I{current_row}:N{current_row}')
+    for cell in sheet[current_row]:
+        cell.alignment = Alignment(horizontal='center')
     
     
     # 运输品类合计
@@ -479,14 +523,19 @@ def item2excel(req: HttpRequest):
     )
     row1 = sheet.max_row+1
     for idx, item in enumerate(transport_summary, start=1):
+        end_site = Site.objects.filter(id=item['endsite_id']).first()
+        end_site_name = end_site.name if end_site else "无"
+        
+        goods = Goods.objects.filter(id=item['goods_id']).first()
+        goods_name = goods.name if goods else "无"
         row = [
             "",
             "",
             idx,
             item['start_spot'],
             "",
-            Site.objects.filter(id=item['endsite_id']).first().name,
-            Goods.objects.filter(id=item['goods_id']).first().name,
+            end_site_name,
+            goods_name,
             "",
             item['quantity_sum'],
             item['unit'],
@@ -507,16 +556,18 @@ def item2excel(req: HttpRequest):
     sheet.merge_cells(start_row=row1, start_column=1, end_row=row2, end_column=2)
     cell = sheet.cell(row=row1, column=1)
     cell.value = "运 输 品 类 合 计"
+    cell.font = Font(bold=True)
     cell.alignment = Alignment(horizontal='center', vertical='center')
-
+    
     sheet.append(["","","合计","-","","-","-","","-","-","-","-","-","-"])
     current_row = sheet.max_row
     sheet.merge_cells(f'A{current_row}:B{current_row}')
     sheet.merge_cells(f'D{current_row}:E{current_row}')
     sheet.merge_cells(f'G{current_row}:H{current_row}')
-    
+    for cell in sheet[current_row]:
+        cell.alignment = Alignment(horizontal='center')
+
     # 工地负责人及固定信息
-    sheet.append([""] * 11)
     sheet.append(["工 地 负 责 人（ 签 字 确 认 ) ：","","","","","运 输 单 位 负 责 人 (  签 字 确 认 ) ："])
     current_row = sheet.max_row
     sheet.merge_cells(f'A{current_row}:E{current_row}')
@@ -524,22 +575,37 @@ def item2excel(req: HttpRequest):
 
     
     sheet.append(["经 营 范 围 ： 本 公 司 承 拆 土 石 方 工 程 、渣 土 、 建 筑 垃 圾 运 输 、 砂 石 料 、 柴 油 配 送 等 。"])
+    current_row = sheet.max_row
+    for cell in sheet[current_row]:
+        cell.font = Font(bold=True)
     sheet.append(["成 就 伙 伴 、 铸 造 品 牌 、 我 们 每 天 努 力 、 我 们 每 天 进 步 。宏 途 运 输 每 月 对 帐 单"])
     centered_row = sheet.max_row
+    sheet.merge_cells(f'A{centered_row}:N{centered_row}')
     # 设置该行每个单元格居中对齐
     for cell in sheet[centered_row]:
         cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.font = Font(size=16,bold=True)
 
-    # 保存到本地
+    # # 保存到本地
+    for row in sheet.iter_rows():
+        sheet.row_dimensions[row[0].row].height = 15
+        for cell in row:
+            if not cell.font:
+                set_font_and_alignment(cell)
+    sheet.row_dimensions[1].height = 25  # 设置第一行的行高
+    sheet.row_dimensions[2].height = 25  # 设置第一行的行高
+    sheet.row_dimensions[3].height = 25  # 设置第一行的行高
+    sheet.row_dimensions[sheet.max_row].height = 22  # 设置第一行的行高
+    sheet.row_dimensions[sheet.max_row-2].height = 30  # 设置第一行的行高
+    # return request_success()
+    # 保存到内存
     local_file_path = "/root/cheliangyunshu/BE-vehicle/test/test.xlsx"
     workbook.save(local_file_path)
+    print(1)
+    file_stream = io.BytesIO()
+    workbook.save(file_stream)
+    file_stream.seek(0)
     
-    return HttpResponse(f"文件已保存到本地: {local_file_path}")
-    # 保存到内存
-    # file_stream = io.BytesIO()
-    # workbook.save(file_stream)
-    # file_stream.seek(0)
-    
-    # response = HttpResponse(file_stream, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    # response['Content-Disposition'] = 'attachment;filename=transport_statement.xlsx'
-    # return response
+    response = HttpResponse(file_stream, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment;filename=transport_statement.xlsx'
+    return response

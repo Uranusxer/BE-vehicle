@@ -75,7 +75,13 @@ sheet['D4'] = "八 达 通 渣 土 运 输 有 限 公 司"
 sheet['G4'] = "公 司 负 责 人"
 sheet['I4'] = "叶 家 荣 19859999999"
 
-
+for row in sheet['A2:N2']:
+    for cell in row:
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+for cell in sheet['A3:N3']:
+    cell.alignment = Alignment(horizontal='center', vertical='center')
+for cell in sheet['A4:N4']:
+    cell.alignment = Alignment(horizontal='center', vertical='center')
 
 # 列标题
 headers = ["序号", "起始日期", "", "运输起点", "", "终点工地", "品类", "", "数量", "单位", "单价", "终点付费金额", "起点补贴金额", "终点补贴金额"]
