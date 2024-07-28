@@ -11,10 +11,12 @@ class Item(models.Model):
     endsite_id = models.IntegerField(default=0)
     vehicle_id = models.IntegerField(default=0)
     goods_id = models.IntegerField(default=0)
+    start_spot = models.CharField(max_length=MAX_CHAR_LENGTH,null=True)
     created_time = models.FloatField(default=utils_time.get_timestamp())
     start_date = models.CharField(max_length=MAX_CHAR_LENGTH)
     end_date = models.CharField(max_length=MAX_CHAR_LENGTH)
     unit = models.CharField(max_length=MAX_CHAR_LENGTH, choices=UNIT_CHOICES, default='time')
+    quantity = models.FloatField(default=0.0)
     contractorPrice = models.FloatField(default=0.0)
     startSubsidy = models.FloatField(default=0.0)
     endSubsidy = models.FloatField(default=0.0)
@@ -33,9 +35,11 @@ class Item(models.Model):
             "end_site":end_site.serialize() if end_site else None,
             "vehicle":vehicle.serialize() if vehicle else None,
             "goods":goods.serialize() if goods else None,
+            "start_spot":self.start_spot,
             "start_date":self.start_date,
             "end_date":self.end_date,
             "unit":self.unit,
+            "quantity":self.quantity,
             "contractorPrice":self.contractorPrice,
             "startSubsidy":self.startSubsidy,
             "endSubsidy":self.endSubsidy,

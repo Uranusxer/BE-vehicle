@@ -43,11 +43,7 @@ def start_site_list(req:HttpRequest,per_page,page):
     # failure_response, user = get_user_from_request(req,'GET')
     # if failure_response:
     #     return failure_response
-    body = json.loads(req.body.decode("utf-8"))
-    try:
-        owner = require(body, "owner", "string", err_msg="Missing or error type of [owner]")
-    except:
-        owner = None
+    owner = req.GET.get('owner', None)
     site_list = Site.objects.filter(type=START,if_delete=False).order_by("-created_time")
     if owner:
         site_list = site_list.filter(owner=owner)
@@ -91,11 +87,7 @@ def end_site_list(req:HttpRequest,per_page,page):
     # failure_response, user = get_user_from_request(req,'GET')
     # if failure_response:
     #     return failure_response
-    body = json.loads(req.body.decode("utf-8"))
-    try:
-        owner = require(body, "owner", "string", err_msg="Missing or error type of [owner]")
-    except:
-        owner = None
+    owner = req.GET.get('owner', None)
     site_list = Site.objects.filter(type=END,if_delete=False).order_by("-created_time")
     if owner:
         site_list = site_list.filter(owner=owner)
@@ -396,7 +388,8 @@ def owner_list(req: HttpRequest, per_page, page):
 
     # 获取所有未删除的sites, 然后提取所有的不重复的owners
     owner_list = Site.objects.filter(if_delete=False).values_list("owner", flat=True).distinct().order_by("owner")
-
+    # 过滤掉为None的项
+    owner_list = [owner for owner in owner_list if owner is not None]
     # 分页处理
     paginator = Paginator(owner_list, per_page)
     owner_page = paginator.get_page(page)

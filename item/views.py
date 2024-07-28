@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from django.http import HttpRequest
 from item.models import Item
+from parameter.models import Site
 from utils.utils_request import BAD_METHOD, request_failed, request_success
 from utils.utils_require import CheckRequire, require
 from utils.utils_time import get_timestamp
@@ -20,9 +21,10 @@ def transport_item(req:HttpRequest):
     endsite_id = require(body,"endsite_id","int",err_msg="Missing or error type of [endsite_id]")
     vehicle_id  = require(body,"vehicle_id","int",err_msg="Missing or error type of [vehicle_id]")
     goods_id = require(body,"goods_id","int",err_msg="Missing or error type of [goods_id]")
+    start_spot = require(body,"start_spot","string",err_msg="Missing or error type of [start_spot]")
     start_date = require(body,"start_date","string",err_msg="Missing or error type of [start_date]")
     end_date = require(body,"end_date","string",err_msg="Missing or error type of [end_date]")
-    Newitem = Item.objects.create(startsite_id=startsite_id,endsite_id=endsite_id,vehicle_id=vehicle_id,goods_id=goods_id,start_date=start_date,end_date=end_date,created_time=get_timestamp())
+    Newitem = Item.objects.create(startsite_id=startsite_id,endsite_id=endsite_id,vehicle_id=vehicle_id,goods_id=goods_id,start_date=start_date,end_date=end_date,created_time=get_timestamp(),start_spot=start_spot)
     return request_success()
 
 @CheckRequire
@@ -96,6 +98,14 @@ def change_item(req:HttpRequest):
         driverPrice = require(body, "driverPrice", "float", err_msg="Missing or error type of [driverPrice]")
     except:
         driverPrice = None
+    try:
+        start_spot = require(body, "start_spot", "string", err_msg="Missing or error type of [start_spot]")
+    except:
+        start_spot = None
+    try:
+        quantity = require(body, "quantity", "float", err_msg="Missing or error type of [quantity]")
+    except:
+        quantity = None
 
     if startsite_id:
         item.startsite_id = startsite_id
@@ -121,6 +131,10 @@ def change_item(req:HttpRequest):
         item.endPayment = endPayment
     if driverPrice:
         item.driverPrice = driverPrice
+    if start_spot:
+        item.start_spot = start_spot
+    if quantity:
+        item.quantity = quantity
     item.save()
     return request_success()
 
@@ -156,17 +170,18 @@ def search4item(req:HttpRequest,per_page,page):
         items = items.filter(vehicle_id=vehicle_id,if_delete=False)
     if goods_id is not None:
         items = items.filter(goods_id=goods_id,if_delete=False)
-    # if start_date is not None:
-    #     items = items.filter(start_date__gte=start_date)
-    # if end_date is not None:
-    #     items = items.filter(end_date__lte=end_date)
+    if start_date is not None:
+        items = items.filter(start_date__gte=start_date)
+    if end_date is not None:
+        items = items.filter(end_date__lte=end_date)
     if unit is not None:
         items = items.filter(unit=unit,if_delete=False)
     paginator = Paginator(items, per_page)
     current_page = paginator.get_page(page)
     total_pages = paginator.num_pages
     return_data = [item.serialize() for item in current_page]
-    return request_success({"items":return_data,"total_pages":total_pages})
+    total_amount = sum(item.driverPrice for item in current_page)
+    return request_success({"items":return_data,"total_pages":total_pages,"total_amount":total_amount})
 
 @CheckRequire
 def item_list(req:HttpRequest,per_page,page):
@@ -219,6 +234,10 @@ def item_price(req: HttpRequest):
             except:
                 driverPrice = None
             try:
+                quantity = require(item_data, "quantity", "float", err_msg="Missing or error type of [quantity]")
+            except:
+                quantity = None
+            try:
                 unit = require(item_data, "unit", "string", err_msg="Missing or error type of [unit]")
             except:
                 unit = None
@@ -237,6 +256,8 @@ def item_price(req: HttpRequest):
                 item.endPayment = endPayment
             if driverPrice:
                 item.driverPrice = driverPrice
+            if quantity:
+                item.quantity = quantity
             if unit:
                 item.unit = unit
             item.save()
