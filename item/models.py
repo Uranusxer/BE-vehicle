@@ -3,6 +3,7 @@ from utils.utils_require import MAX_CHAR_LENGTH
 from utils.constants import SITE_TYPE,START,END,UNIT_CHOICES
 from utils import utils_time
 from parameter.models import Site,Goods,Vehicle
+
 # Create your models here.
 
 class Item(models.Model):
