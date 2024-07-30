@@ -18,10 +18,14 @@ def advance(req:HttpRequest):
     # if failure_response:
     #     return failure_response
     body = json.loads(req.body.decode("utf-8"))
-    vehicle_id  = require(body,"vehicle_id","int",err_msg="Missing or error type of [vehicle_id]")
-    amount  = require(body,"amount","int",err_msg="Missing or error type of [amount]")
-    advance_time  = require(body,"advance_time","string",err_msg="Missing or error type of [advance_time]")
-    Newadvance = Advance.objects.create(vehicle_id=vehicle_id,amount=amount,advance_time=advance_time,created_time=get_timestamp())
+    vehicle_id = require(body,"vehicle_id","int",err_msg="Missing or error type of [vehicle_id]")
+    amount = require(body,"amount","int",err_msg="Missing or error type of [amount]")
+    advance_time = require(body,"advance_time","string",err_msg="Missing or error type of [advance_time]")
+    try:
+        note = require(body,"note","string",err_msg="Missing or error type of [note]")
+    except:
+        note = "无"
+    Newadvance = Advance.objects.create(vehicle_id=vehicle_id,amount=amount,advance_time=advance_time,created_time=get_timestamp(),note=note)
     return request_success()
 
 @CheckRequire
@@ -43,7 +47,7 @@ def advance_list(req:HttpRequest,per_page,page):
     #     return failure_response
     driver = req.GET.get('driver',None)
 
-    advances = Advance.objects.all()
+    advances = Advance.objects.filter(if_delete=False)
     if driver is not None:
         vehicle_ids = Vehicle.objects.filter(driver=driver).values_list('id', flat=True)
         advances = advances.filter(vehicle_id__in=vehicle_ids)

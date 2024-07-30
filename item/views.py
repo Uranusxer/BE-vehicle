@@ -72,7 +72,9 @@ def transport_item(req:HttpRequest):
     start_spot = require(body,"start_spot","string",err_msg="Missing or error type of [start_spot]")
     start_date = require(body,"start_date","string",err_msg="Missing or error type of [start_date]")
     end_date = require(body,"end_date","string",err_msg="Missing or error type of [end_date]")
-    Newitem = Item.objects.create(startsite_id=startsite_id,endsite_id=endsite_id,vehicle_id=vehicle_id,goods_id=goods_id,start_date=start_date,end_date=end_date,created_time=get_timestamp(),start_spot=start_spot)
+    quantity = require(body,"quantity","float",err_msg="Missing or error type of [quantity]")
+    unit = require(body,"unit","string",err_msg="Missing or error type of [unit]")
+    Newitem = Item.objects.create(startsite_id=startsite_id,endsite_id=endsite_id,vehicle_id=vehicle_id,goods_id=goods_id,start_date=start_date,end_date=end_date,created_time=get_timestamp(),start_spot=start_spot,quantity=quantity,unit=unit)
     return request_success()
 
 @CheckRequire
@@ -201,8 +203,8 @@ def search4item(req:HttpRequest,per_page,page):
     end_date = req.GET.get('end_date',None)
     unit = req.GET.get('unit',None)
 
-    items = Item.objects.all()
-    if startsite_owner is not None:
+    items = Item.objects.filter(if_delete=False)
+    if startsite_owner is not None: 
         startsite_ids = Site.objects.filter(owner=startsite_owner,if_delete=False).values_list('id', flat=True)
         items = items.filter(startsite_id__in=startsite_ids)
     
@@ -576,11 +578,11 @@ def item2excel(req: HttpRequest):
         cell.font = Font(bold=True)
         cell.alignment = Alignment(horizontal='left', vertical='center')
     
-    sheet.append(["经 营 范 围 ： 本 公 司 承 拆 土 石 方 工 程 、渣 土 、 建 筑 垃 圾 运 输 、 砂 石 料 、 柴 油 配 送 等 。"])
+    sheet.append(["经 营 范 围 ： 建筑垃圾清运，砂石料运输及销售，供应铺路石渣，云梯车租赁。"])
     current_row = sheet.max_row
     for cell in sheet[current_row]:
         cell.font = Font(bold=True)
-    sheet.append(["成 就 伙 伴 、 铸 造 品 牌 、 我 们 每 天 努 力 、 我 们 每 天 进 步 。"])
+    sheet.append(["立 信 于 心 ， 尽 责 至 善！"])
     centered_row = sheet.max_row
     sheet.merge_cells(f'A{centered_row}:N{centered_row}')
     # 设置该行每个单元格居中对齐

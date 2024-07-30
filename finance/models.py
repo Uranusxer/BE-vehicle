@@ -11,6 +11,7 @@ class Advance(models.Model):
     amount = models.IntegerField(default=0)
     advance_time = models.CharField(max_length=MAX_CHAR_LENGTH)
     created_time = models.FloatField(default=utils_time.get_timestamp())
+    note = models.CharField(max_length=MAX_CHAR_LENGTH,default="无")
     if_delete = models.BooleanField(default=False)
 
     def serialize(self):
@@ -21,6 +22,7 @@ class Advance(models.Model):
             "amount":self.amount,
             "advance_time":self.advance_time,
             "created_time":self.created_time,
+            "note":self.note,
             "if_delete":self.if_delete
         }
         return data  
