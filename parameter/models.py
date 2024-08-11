@@ -4,6 +4,24 @@ from utils.constants import SITE_TYPE,START,END
 from utils import utils_time
 # Create your models here.
 
+class Project(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    name = models.CharField(max_length=MAX_CHAR_LENGTH)
+    owner = models.CharField(max_length=MAX_CHAR_LENGTH,null=True)
+    owner_phone = models.BigIntegerField(default=0,null=True)
+    created_time = models.FloatField(default=utils_time.get_timestamp())
+    if_delete = models.BooleanField(default=False)
+    def serialize(self):
+        data = {
+            "id":self.id,
+            "name":self.name,
+            "owner":self.owner,
+            "owner_phone":self.owner_phone,
+            "created_time":self.created_time,
+            "if_delete":self.if_delete
+        }
+        return data     
+
 class Site(models.Model):
     id = models.BigAutoField(primary_key=True)
     name = models.CharField(max_length=MAX_CHAR_LENGTH)
@@ -12,16 +30,12 @@ class Site(models.Model):
     type = models.CharField(max_length=20,choices=SITE_TYPE,default=START)
     created_time = models.FloatField(default=utils_time.get_timestamp())
     if_delete = models.BooleanField(default=False)
-    owner = models.CharField(max_length=MAX_CHAR_LENGTH,null=True)
-    owner_phone = models.BigIntegerField(default=None,null=True)
     def serialize(self):
         data = {
             "id":self.id,
             "name":self.name,
             "manager":self.manager,
             "manager_phone":self.manager_phone,
-            "owner":self.owner,
-            "owner_phone":self.owner_phone,
             "created_time":self.created_time,
             "if_delete":self.if_delete
         }
@@ -73,3 +87,4 @@ class Pay(models.Model):
             "if_delete":self.if_delete
         }
         return data
+

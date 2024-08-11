@@ -19,3 +19,10 @@ UNIT_CHOICES = [
     ('cube', '方'),
     ('block', '块'),
 ]
+
+LOAD_CHOICES = [
+    ('Own Equipment', '自带机械'),
+    ('Site Equipment', '工地机械'),
+    ('Manual Loading', '人工装车'),
+    ('On-site Transport', '场内倒运'),
+]

@@ -65,7 +65,7 @@ def change_advance(req:HttpRequest):
     #     return failure_response
     body = json.loads(req.body.decode("utf-8"))
     advance_id = require(body,"advance_id","int",err_msg="Missing or error type of [advance_id]")
-    advance = Advance.objects.filter(id=pay_id).first()
+    advance = Advance.objects.filter(id=advance_id).first()
     if not advance:
         return request_failed(code=1,info="Advance does not exist",status_code=404)
     try:
@@ -80,12 +80,18 @@ def change_advance(req:HttpRequest):
         advance_time = require(body, "advance_time", "string", err_msg="Missing or error type of [advance_time]")
     except:
         advance_time = None
+    try:
+        note = require(body, "note", "string", err_msg="Missing or error type of [note]")
+    except:
+        note = None
     if vehicle_id:
         advance.vehicle_id = vehicle_id
     if amount:
         advance.amount = amount
     if advance_time:
         advance.advance_time = advance_time
+    if note:
+        advance.note = note
     advance.save()
     return request_success()
 
