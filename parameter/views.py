@@ -202,8 +202,9 @@ def owner2project(req:HttpRequest,per_page,page):
     #     return failure_response
     ownerName = req.GET.get('ownerName', None)
     if not ownerName:
-        return request_failed(code=1,info="Owner name not found in the request",status_code=400)
-    project_list = Project.objects.filter(owner=ownerName,if_delete=False).order_by("-created_time")
+        project_list = Project.objects.filter(if_delete=False).order_by("-created_time")
+    else:
+        project_list = Project.objects.filter(owner=ownerName,if_delete=False).order_by("-created_time")
     paginator = Paginator(project_list,per_page)
     current_page = paginator.get_page(page)
     return_data = [item.serialize() for item in current_page]

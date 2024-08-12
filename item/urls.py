@@ -8,5 +8,7 @@ urlpatterns = [
     path('item_price', views.item_price, name='item_price'),
     path('change_item', views.change_item, name='change_item'),
     path('search4item/<int:per_page>/<int:page>', views.search4item, name='search4item'),
+    path('start_excel',views.start_excel,name='start_excel'),
+    path('end_excel',views.end_excel,name='end_excel')
     # path('item2excel',views.item2excel,name='item2excel')
 ]

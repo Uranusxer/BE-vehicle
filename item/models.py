@@ -13,7 +13,7 @@ class Item(models.Model):
     startsite_id = models.IntegerField(default=0)
     endsite_id = models.IntegerField(default=0)
     project_id = models.IntegerField(default=0)
-    vehicle_id = models.IntegerField(default=0)
+    vehicle_ids = models.JSONField(default=list)
     goods_id = models.IntegerField(default=0)
 
     # parameter
@@ -34,18 +34,22 @@ class Item(models.Model):
     created_time = models.FloatField(default=utils_time.get_timestamp())
     if_delete = models.BooleanField(default=False)
 
+    def get_load_display(self):
+        return dict(LOAD_CHOICES).get(self.load, self.load)
 
     def serialize(self):
         start_site = Site.objects.filter(id=self.startsite_id).first()
         end_site = Site.objects.filter(id=self.endsite_id).first()
-        vehicle = Vehicle.objects.filter(id=self.vehicle_id).first()
         goods = Goods.objects.filter(id=self.goods_id).first()
         project = Project.objects.filter(id=self.project_id).first()
+        # Fetch all vehicles with IDs in vehicle_ids
+        vehicles = Vehicle.objects.filter(id__in=self.vehicle_ids)
+        vehicle_list = [vehicle.serialize() for vehicle in vehicles]
         data = {
             "id":self.id,
             "start_site":start_site.serialize() if start_site else None,
             "end_site":end_site.serialize() if end_site else None,
-            "vehicle":vehicle.serialize() if vehicle else None,
+            "vehicle_list":vehicle_list,
             "goods":goods.serialize() if goods else None,
             "project":project.serialize() if project else None,
 
@@ -53,6 +57,7 @@ class Item(models.Model):
             "date":self.date,
             "unit":self.unit,
             "quantity":self.quantity,
+            "load":self.load,
 
             "contractorPrice":self.contractorPrice,
             "startSubsidy":self.startSubsidy,
