@@ -73,7 +73,7 @@ def transport_item(req:HttpRequest):
     # all kinds of ids
     startsite_id = require(body,"startsite_id","int",err_msg="Missing or error type of [startsite_id]")
     endsite_id = require(body,"endsite_id","int",err_msg="Missing or error type of [endsite_id]")
-    vehicle_ids  = require(body,"vehicle_ids","list",err_msg="Missing or error type of [vehicle_ids]")
+    vehicle_id  = require(body,"vehicle_id","int",err_msg="Missing or error type of [vehicle_id]")
     goods_id = require(body,"goods_id","int",err_msg="Missing or error type of [goods_id]")
     project_id = require(body,"project_id","int",err_msg="Missing or error type of [project_id]")
     
@@ -108,7 +108,7 @@ def transport_item(req:HttpRequest):
     except:
         driverPrice = 0
 
-    Newitem = Item.objects.create(startsite_id=startsite_id,endsite_id=endsite_id,vehicle_ids=vehicle_ids,
+    Newitem = Item.objects.create(startsite_id=startsite_id,endsite_id=endsite_id,vehicle_id=vehicle_id,
             goods_id=goods_id,project_id=project_id,date=date,unit=unit,quantity=quantity,note=note,
             load=load,contractorPrice=contractorPrice,startSubsidy=startSubsidy,endSubsidy=endSubsidy,
             endPayment=endPayment,driverPrice=driverPrice,created_time=get_timestamp())
@@ -146,9 +146,9 @@ def change_item(req:HttpRequest):
     except:
         endsite_id = None
     try:
-        vehicle_ids = require(body, "vehicle_ids", "list", err_msg="Missing or error type of [vehicle_ids]")
+        vehicle_id = require(body, "vehicle_id", "int", err_msg="Missing or error type of [vehicle_id]")
     except:
-        vehicle_ids = None
+        vehicle_id = None
     try:
         goods_id = require(body, "goods_id", "int", err_msg="Missing or error type of [goods_id]")
     except:
@@ -205,8 +205,8 @@ def change_item(req:HttpRequest):
         item.startsite_id = startsite_id
     if endsite_id:
         item.endsite_id = endsite_id
-    if vehicle_ids:
-        item.vehicle_ids = vehicle_ids
+    if vehicle_id:
+        item.vehicle_id = vehicle_id
     if goods_id:
         item.goods_id = goods_id
     if project_id:
@@ -242,10 +242,10 @@ def search4item(req:HttpRequest,per_page,page):
     # failure_response, user = get_user_from_request(req,'GET')
     # if failure_response:
     #     return failure_response
-    project_owner = req.GET.get('project_owner', None)
+    project_owner = req.GET.get('ownerName', None)
     startsite_id = req.GET.get('startsite_id',None)
     endsite_id = req.GET.get('endsite_id',None)
-    vehicle_ids = req.GET.get('vehicle_ids',None)
+    vehicle_id = req.GET.get('vehicle_id',None)
     goods_id = req.GET.get('goods_id',None)
     project_id = req.GET.get('project_id', None)
     start_date = req.GET.get('start_date',None)
@@ -261,12 +261,8 @@ def search4item(req:HttpRequest,per_page,page):
         items = items.filter(startsite_id=startsite_id)
     if endsite_id is not None:
         items = items.filter(endsite_id=endsite_id)
-    if vehicle_ids is not None:
-        # items = items.filter(vehicle_id=vehicle_id)
-        # TODO: search for the items that item.vehicle_ids inclue vehicle_ids
-        # 将 vehicle_ids 从字符串转换为整数列表
-        vehicle_ids_list = [int(v_id) for v_id in vehicle_ids.split(',')]
-        items = items.filter(vehicle_ids__contains=vehicle_ids_list)
+    if vehicle_id is not None:
+        items = items.filter(vehicel_id=vehicle_id)
 
     if goods_id is not None:
         items = items.filter(goods_id=goods_id)
@@ -378,298 +374,6 @@ def item_price(req: HttpRequest):
     else:
         return JsonResponse(response_data, status=200)
 
-# @CheckRequire
-# def item2excel(req: HttpRequest):
-#     # 从请求参数中获取数据
-#     body = json.loads(req.body.decode("utf-8"))
-#     item_ids = require(body, "item_ids", "list", err_msg="Missing or error type of [item_ids]")
-#     startsite_id = require(body, "startsite_id", "int", err_msg="Missing or error type of [startsite_id]")
-#     start_date = require(body, "start_date", "string", err_msg="Missing or error type of [start_date]")
-#     end_date = require(body, "end_date", "string", err_msg="Missing or error type of [end_date]")
-    
-#     # 获取startsite对象并检查
-#     startsite = Site.objects.filter(id=startsite_id).first()
-#     if not startsite:
-#         return request_failed(code=3, info="startsite not found", status_code=404)
-    
-#     # 转换日期格式，假设传入的日期格式为"2024-07-03T16:00:00.000Z"
-#     start_date = start_date.split('T')[0]
-#     end_date = end_date.split('T')[0]
-    
-#     # 获取过滤的Item
-#     items = Item.objects.filter(id__in=item_ids, if_delete=False)
-    
-#     # 创建Excel工作簿
-#     workbook = Workbook()
-#     sheet = workbook.active
-#     sheet.title = "宏途运输每月对账单"
-#     default_font = Font(size=12)
-#     def set_font_and_alignment(cell):
-#         cell.font = default_font
-#         cell.alignment = Alignment(horizontal='center', vertical='center')
-#     # 设置列宽
-#     column_widths = {
-#         'A': 5,    # 序号
-#         'B': 15,   # 起始日期
-#         'C': 15,   # 合并单元格"起始日期"
-#         'D': 20,   # 运输起点
-#         'E': 20,   # 合并单元格"运输起点"
-#         'F': 10,   # 终点工地
-#         'G': 15,   # 品类
-#         'H': 15,   # 合并单元格"品类"
-#         'I': 10,   # 数量
-#         'J': 10,   # 单位
-#         'K': 10,   # 单价
-#         'L': 15,   # 终点付费金额
-#         'M': 15,   # 起点补贴金额
-#         'N': 15    # 终点补贴金额
-#     }
-
-#     for col_letter, width in column_widths.items():
-#         sheet.column_dimensions[col_letter].width = width
-
-#     # 添加表头
-#     sheet.merge_cells('A1:N1')
-#     title_cell = sheet['A1']
-#     title_cell.value = "宏途运输每月对账单"
-#     title_cell.alignment = Alignment(horizontal='center', vertical='center')
-#     title_cell.font = Font(size=24, bold=True)
-
-
-#     # 固定的表头信息
-#     sheet.merge_cells('A2:C2')
-#     sheet.merge_cells('D2:F2')
-#     sheet.merge_cells('G2:H2')
-#     sheet.merge_cells('I2:N2')
-#     sheet.merge_cells('A3:C3')
-#     sheet.merge_cells('D3:F3')
-#     sheet.merge_cells('G3:H3')
-#     sheet.merge_cells('I3:N3')
-#     sheet.merge_cells('A4:C4')
-#     sheet.merge_cells('D4:F4')
-#     sheet.merge_cells('G4:H4')
-#     sheet.merge_cells('I4:N4')
-    
-#     sheet['A2'] = "起 点 工 地 单 位 名 称"
-#     sheet['D2'] = startsite.name
-#     sheet['G2'] = "工 地 老 板 名 称"
-#     sheet['I2'] = startsite.owner
-#     sheet['A3'] = "对 账 起 始 日 期"
-#     sheet['D3'] = start_date
-#     sheet['G3'] = "对 账 截 止 日 期"
-#     sheet['I3'] = end_date
-#     sheet['A4'] = "运 输 单 位 名 称"
-#     sheet['D4'] = "八 达 通 渣 土 运 输 有 限 公 司"
-#     sheet['G4'] = "公 司 负 责 人"
-#     sheet['I4'] = "叶 家 荣 19859999999"
-    
-#     for row in sheet['A2:N4']:
-#         for cell in row:
-#             cell.alignment = Alignment(horizontal='center', vertical='center')
-#             cell.font = Font(bold=True)
-    
-#     # 列标题
-#     headers = ["序号", "起始日期", "", "运输起点", "", "终点工地", "品类", "", "数量", "单位", "单价", "终点付费金额", "起点补贴金额", "终点补贴金额"]
-#     sheet.append(headers)
-    
-#     current_row = sheet.max_row
-#     sheet.merge_cells(f'B{current_row}:C{current_row}')
-#     sheet.merge_cells(f'D{current_row}:E{current_row}')
-#     sheet.merge_cells(f'G{current_row}:H{current_row}')
-    
-#     for cell in sheet[current_row]:
-#         cell.font = Font(bold=True)
-#         cell.alignment = Alignment(horizontal='center')
-    
-#     # 合并相同条件下的明细
-#     summary = items.values(
-#         'start_date',
-#         'start_spot',
-#         'unit',
-#         'contractorPrice',
-#         'goods_id',
-#         'endsite_id'
-#     ).annotate(
-#         quantity_sum=Sum('quantity'),
-#         end_payment_sum=Sum('endPayment'),
-#         start_subsidy_sum=Sum('startSubsidy'),
-#         end_subsidy_sum=Sum('endSubsidy')
-#     )
-    
-#     total_amount = 0
-#     for idx, item in enumerate(summary, start=1):
-#         end_site = Site.objects.filter(id=item['endsite_id']).first()
-#         end_site_name = end_site.name if end_site else "无"
-        
-#         goods = Goods.objects.filter(id=item['goods_id']).first()
-#         goods_name = goods.name if goods else "无"
-#         row = [
-#             idx,
-#             item['start_date'].split('T')[0],
-#             "",
-#             item['start_spot'],
-#             "",
-#             end_site_name,
-#             goods_name,
-#             "",
-#             item['quantity_sum'],
-#             item['unit'],
-#             item['contractorPrice'],
-#             item['end_payment_sum'],
-#             item['start_subsidy_sum'],
-#             item['end_subsidy_sum']
-#         ]
-#         # 将数据追加到sheet中，并合并相应的单元格
-#         sheet.append(row)
-#         current_row = sheet.max_row
-#         sheet.merge_cells(f'B{current_row}:C{current_row}')
-#         sheet.merge_cells(f'D{current_row}:E{current_row}')
-#         sheet.merge_cells(f'G{current_row}:H{current_row}')
-
-#         for cell in sheet[current_row]:
-#             cell.alignment = Alignment(horizontal='center', vertical='center')
-
-#         total_amount += item['quantity_sum'] * item['contractorPrice']
-
-#     # 合计行
-#     total_cn = num2cn(total_amount)
-#     sheet.append(["合 计", "", "", "-", "", "-", "", "-", sum(item['quantity_sum'] for item in summary), "-", "-", "-", "-", "-"])
-#     current_row = sheet.max_row
-#     sheet.merge_cells(f'A{current_row}:C{current_row}')
-#     sheet.merge_cells(f'D{current_row}:E{current_row}')
-#     sheet.merge_cells(f'G{current_row}:H{current_row}')
-#     for cell in sheet[current_row]:
-#         cell.alignment = Alignment(horizontal='center')
-#     sheet.append(["总 计 金 额", "", "", total_amount, "", "总 计 大 写  (金 额 )", "", "", total_cn])
-#     current_row = sheet.max_row
-#     sheet.merge_cells(f'A{current_row}:C{current_row}')
-#     sheet.merge_cells(f'D{current_row}:E{current_row}')
-#     sheet.merge_cells(f'F{current_row}:H{current_row}')
-#     sheet.merge_cells(f'I{current_row}:N{current_row}')
-#     for cell in sheet[current_row]:
-#         cell.alignment = Alignment(horizontal='center')
-    
-    
-#     # 运输品类合计
-#     headers = ["","","序号", "运输起点", "", "终点工地", "品类", "", "数量", "单位", "单价", "终点付费金额", "起点补贴金额", "终点补贴金额"]
-#     sheet.append(headers)
-
-#     current_row = sheet.max_row
-#     sheet.merge_cells(f'A{current_row}:B{current_row}')
-#     sheet.merge_cells(f'D{current_row}:E{current_row}')
-#     sheet.merge_cells(f'G{current_row}:H{current_row}')
-    
-#     for cell in sheet[current_row]:
-#         cell.font = Font(bold=True)
-#         cell.alignment = Alignment(horizontal='center', vertical='center')
-
-#     transport_summary = items.values(
-#         'start_spot',
-#         'contractorPrice',
-#         'unit',
-#         'goods_id',
-#         'endsite_id'
-#     ).annotate(
-#         quantity_sum=Sum('quantity'),
-#         end_payment_sum=Sum('endPayment'),
-#         start_subsidy_sum=Sum('startSubsidy'),
-#         end_subsidy_sum=Sum('endSubsidy')
-#     )
-#     row1 = sheet.max_row+1
-#     for idx, item in enumerate(transport_summary, start=1):
-#         end_site = Site.objects.filter(id=item['endsite_id']).first()
-#         end_site_name = end_site.name if end_site else "无"
-        
-#         goods = Goods.objects.filter(id=item['goods_id']).first()
-#         goods_name = goods.name if goods else "无"
-#         row = [
-#             "",
-#             "",
-#             idx,
-#             item['start_spot'],
-#             "",
-#             end_site_name,
-#             goods_name,
-#             "",
-#             item['quantity_sum'],
-#             item['unit'],
-#             item['contractorPrice'],
-#             item['end_payment_sum'],
-#             item['start_subsidy_sum'],
-#             item['end_subsidy_sum']
-#         ]
-#         sheet.append(row)
-#         current_row = sheet.max_row
-#         # sheet.merge_cells(f'A{current_row}:B{current_row}')
-#         sheet.merge_cells(f'D{current_row}:E{current_row}')
-#         sheet.merge_cells(f'G{current_row}:H{current_row}')
-
-#         for cell in sheet[current_row]:
-#             cell.alignment = Alignment(horizontal='center', vertical='center')
-#     row2 = sheet.max_row
-#     sheet.merge_cells(start_row=row1, start_column=1, end_row=row2, end_column=2)
-#     cell = sheet.cell(row=row1, column=1)
-#     cell.value = "运 输 品 类 合 计"
-#     cell.font = Font(bold=True)
-#     cell.alignment = Alignment(horizontal='center', vertical='center')
-    
-#     sheet.append(["","","合计","-","","-","-","","-","-","-","-","-","-"])
-#     current_row = sheet.max_row
-#     sheet.merge_cells(f'A{current_row}:B{current_row}')
-#     sheet.merge_cells(f'D{current_row}:E{current_row}')
-#     sheet.merge_cells(f'G{current_row}:H{current_row}')
-#     for cell in sheet[current_row]:
-#         cell.alignment = Alignment(horizontal='center')
-
-#     # 工地负责人及固定信息
-#     sheet.append(["工 地 负 责 人（ 签 字 确 认 ) ：","","","","","运 输 单 位 负 责 人 (  签 字 确 认 ) ："])
-#     current_row = sheet.max_row
-#     sheet.merge_cells(f'A{current_row}:E{current_row}')
-#     sheet.merge_cells(f'F{current_row}:N{current_row}')
-#     for cell in sheet[current_row]:
-#         cell.font = Font(bold=True)
-#         cell.alignment = Alignment(horizontal='left', vertical='center')
-    
-#     sheet.append(["经 营 范 围 ： 建筑垃圾清运，砂石料运输及销售，供应铺路石渣，云梯车租赁。"])
-#     current_row = sheet.max_row
-#     for cell in sheet[current_row]:
-#         cell.font = Font(bold=True)
-#     sheet.append(["立 信 于 心 ， 尽 责 至 善！"])
-#     centered_row = sheet.max_row
-#     sheet.merge_cells(f'A{centered_row}:N{centered_row}')
-#     # 设置该行每个单元格居中对齐
-#     for cell in sheet[centered_row]:
-#         cell.alignment = Alignment(horizontal='center', vertical='center')
-#         cell.font = Font(size=14,bold=True)
-
-#     # # 保存到本地
-#     for row in sheet.iter_rows():
-#         sheet.row_dimensions[row[0].row].height = 15
-#         for cell in row:
-#             if not cell.font:
-#                 set_font_and_alignment(cell)
-#     sheet.row_dimensions[1].height = 25  # 设置第一行的行高
-#     sheet.row_dimensions[2].height = 25  # 设置第一行的行高
-#     sheet.row_dimensions[3].height = 25  # 设置第一行的行高
-#     sheet.row_dimensions[sheet.max_row].height = 22  # 设置第一行的行高
-#     sheet.row_dimensions[sheet.max_row-2].height = 30  # 设置第一行的行高
-#     # return request_success()
-#     # 保存到内存
-#     local_file_path = "/root/cheliangyunshu/BE-vehicle/test/test.xlsx"
-#     workbook.save(local_file_path)
-#     print(1)
-#     file_stream = io.BytesIO()
-#     workbook.save(file_stream)
-#     file_stream.seek(0)
-    
-#     response = HttpResponse(file_stream, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-#     response['Content-Disposition'] = 'attachment;filename=transport_statement.xlsx'
-#     return response
-
-
-
-
-
 
 
 
@@ -683,9 +387,12 @@ def start_excel(req: HttpRequest):
     end_date = require(body, "end_date", "string", err_msg="Missing or error type of [end_date]")
     
     # 获取startsite对象并检查
-    project = Project.objects.filter(id=project_id).first()
-    if not project:
-        return request_failed(code=3, info="Project not found", status_code=404)
+    if project_id == 0:
+        project = None
+    else:   
+        project = Project.objects.filter(id=project_id).first()
+        if not project:
+            return request_failed(code=3, info="Project not found", status_code=404)
     
     # 转换日期格式，假设传入的日期格式为"2024-07-03T16:00:00.000Z"
     start_date = start_date.split('T')[0]
@@ -742,9 +449,9 @@ def start_excel(req: HttpRequest):
 
     
     sheet['A2'] = "项 目 名 称"
-    sheet['D2'] = project.name
+    sheet['D2'] = project.name if project else None
     sheet['F2'] = "项 目 老 板 名 称"
-    sheet['G2'] = project.owner
+    sheet['G2'] = project.owner if project else None
     sheet['A3'] = "对 账 起 始 日 期"
     sheet['D3'] = start_date
     sheet['F3'] = "对 账 截 止 日 期"
@@ -779,9 +486,7 @@ def start_excel(req: HttpRequest):
         start_site_name = start_site.name if start_site else "无"
         goods = Goods.objects.filter(id=item.goods_id).first()
         goods_name = goods.name if goods else "无"
-        vehicles = Vehicle.objects.filter(id__in=item.vehicle_ids)
-        # TODO:遍历vehicles，取所有vehicle.license，以逗号分隔，形成一个字符串
-        vehicle_licenses = '，'.join([vehicle.license for vehicle in vehicles])
+        vehicle = Vehicle.objects.filter(id=item.vehicle_id).first()
         total_price = item.quantity * item.contractorPrice
         row = [
             idx,
@@ -789,7 +494,7 @@ def start_excel(req: HttpRequest):
             "",
             start_site_name,
             goods_name,
-            vehicle_licenses,
+            vehicle.license,
             item.get_load_display(),
             item.quantity,
             item.unit,
@@ -823,7 +528,7 @@ def start_excel(req: HttpRequest):
     sheet.merge_cells(f'D{current_row}:E{current_row}')
     sheet.merge_cells(f'G{current_row}:L{current_row}')
     for cell in sheet[current_row]:
-        cell.alignment = Alignment(horizontal='center')
+        cell.alignment = Alignment(horizontal='center', vertical='center')
     
     
     # 运输品类合计
@@ -837,40 +542,67 @@ def start_excel(req: HttpRequest):
         cell.font = Font(bold=True)
         cell.alignment = Alignment(horizontal='center', vertical='center')
 
-    transport_summary = items.values(
+    # 初步查询，获取所需的基本信息
+    initial_query = items.values(
         'startsite_id',
         'goods_id',
-    ).annotate(
-        start_subsidy_sum=Sum('startSubsidy'),
-        cost_sum=Sum(F('quantity') * F('contractorPrice'), output_field=FloatField()),
+        'startSubsidy',
+        'quantity',
+        'contractorPrice',
+        'vehicle_id',
     )
 
-    # Step 2: 使用Python逻辑合并vehicle_ids
-    # 创建一个默认字典保存聚合后结果
-    summary_dict = defaultdict(lambda: {'start_subsidy_sum': 0, 'cost_sum': 0, 'vehicle_ids': []})
+    # 准备聚合结果的字典
+    transport_summary_dict = defaultdict(lambda: {
+        'start_subsidy_sum': 0,
+        'cost_sum': 0,
+        'vehicle_ids': []
+    })
 
-    # 迭代原始对象，构建分组键和合并vehicle_ids
-    for item in items:
-        key = (item.startsite_id, item.goods_id)
-        summary_dict[key]['start_subsidy_sum'] += item.startSubsidy
-        summary_dict[key]['cost_sum'] += item.quantity * item.contractorPrice
-        if item.vehicle_ids:
-            summary_dict[key]['vehicle_ids'].extend(item.vehicle_ids)
+    # 循环处理每个初步查询的结果
+    for item in initial_query:
+        key = (item['startsite_id'], item['goods_id'])
+        transport_summary_dict[key]['start_subsidy_sum'] += item['startSubsidy']
+        transport_summary_dict[key]['cost_sum'] += item['quantity'] * item['contractorPrice']
+        transport_summary_dict[key]['vehicle_ids'].append(item['vehicle_id'])
 
-    # 转换结果为列表形式
-    result = []
-    for key, values in summary_dict.items():
-        result.append({
-            'startsite_id': key[0],
-            'goods_id': key[1],
-            'start_subsidy_sum': values['start_subsidy_sum'],
-            'cost_sum': values['cost_sum'],
-            'vehicle_ids': values['vehicle_ids'],
+    # 将聚合结果转换为列表
+    transport_summary = []
+    for (startsite_id, goods_id), data in transport_summary_dict.items():
+        transport_summary.append({
+            'startsite_id': startsite_id,
+            'goods_id': goods_id,
+            'start_subsidy_sum': data['start_subsidy_sum'],
+            'cost_sum': data['cost_sum'],
+            'vehicle_ids': data['vehicle_ids'],
         })
+
+    # # Step 2: 使用Python逻辑合并vehicle_ids
+    # # 创建一个默认字典保存聚合后结果
+    # summary_dict = defaultdict(lambda: {'start_subsidy_sum': 0, 'cost_sum': 0, 'vehicle_ids': []})
+
+    # # 迭代原始对象，构建分组键和合并vehicle_ids
+    # for item in items:
+    #     key = (item.startsite_id, item.goods_id)
+    #     summary_dict[key]['start_subsidy_sum'] += item.startSubsidy
+    #     summary_dict[key]['cost_sum'] += item.quantity * item.contractorPrice
+    #     if item.vehicle_ids:
+    #         summary_dict[key]['vehicle_ids'].extend(item.vehicle_ids)
+
+    # # 转换结果为列表形式
+    # result = []
+    # for key, values in summary_dict.items():
+    #     result.append({
+    #         'startsite_id': key[0],
+    #         'goods_id': key[1],
+    #         'start_subsidy_sum': values['start_subsidy_sum'],
+    #         'cost_sum': values['cost_sum'],
+    #         'vehicle_ids': values['vehicle_ids'],
+    #     })
     row1 = sheet.max_row
     total_sum1 = 0.0
     total_sum2 = 0.0
-    for idx, item in enumerate(result, start=1):
+    for idx, item in enumerate(transport_summary, start=1):
         start_site = Site.objects.filter(id=item['startsite_id']).first()
         start_site_name = start_site.name if start_site else "无"
         goods = Goods.objects.filter(id=item['goods_id']).first()
@@ -956,7 +688,6 @@ def start_excel(req: HttpRequest):
     # 保存到内存
     local_file_path = "/root/cheliangyunshu/BE-vehicle/test/test.xlsx"
     workbook.save(local_file_path)
-    print(1)
     file_stream = io.BytesIO()
     workbook.save(file_stream)
     file_stream.seek(0)
@@ -964,14 +695,6 @@ def start_excel(req: HttpRequest):
     response = HttpResponse(file_stream, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = 'attachment;filename=transport_statement.xlsx'
     return response
-
-
-
-
-
-
-
-
 
 
 
@@ -985,9 +708,12 @@ def end_excel(req: HttpRequest):
     end_date = require(body, "end_date", "string", err_msg="Missing or error type of [end_date]")
     
     # 获取startsite对象并检查
-    project = Project.objects.filter(id=project_id).first()
-    if not project:
-        return request_failed(code=3, info="Project not found", status_code=404)
+    if project_id == 0:
+        project = None
+    else:
+        project = Project.objects.filter(id=project_id).first()
+        if not project:
+            return request_failed(code=3, info="Project not found", status_code=404)
     
     # 转换日期格式，假设传入的日期格式为"2024-07-03T16:00:00.000Z"
     start_date = start_date.split('T')[0]
@@ -1043,9 +769,9 @@ def end_excel(req: HttpRequest):
 
     
     sheet['A2'] = "项 目 名 称"
-    sheet['D2'] = project.name
+    sheet['D2'] = project.name if project else None
     sheet['F2'] = "项 目 老 板 名 称"
-    sheet['G2'] = project.owner
+    sheet['G2'] = project.owner if project else None
     sheet['A3'] = "对 账 起 始 日 期"
     sheet['D3'] = start_date
     sheet['F3'] = "对 账 截 止 日 期"
@@ -1080,9 +806,7 @@ def end_excel(req: HttpRequest):
         end_site_name = end_site.name if end_site else "无"
         goods = Goods.objects.filter(id=item.goods_id).first()
         goods_name = goods.name if goods else "无"
-        vehicles = Vehicle.objects.filter(id__in=item.vehicle_ids)
-        # TODO:遍历vehicles，取所有vehicle.license，以逗号分隔，形成一个字符串
-        vehicle_licenses = '，'.join([vehicle.license for vehicle in vehicles])
+        vehicle = Vehicle.objects.filter(id=item.vehicle_id).first()
         total_price = item.quantity * item.endPayment
         row = [
             idx,
@@ -1090,7 +814,7 @@ def end_excel(req: HttpRequest):
             "",
             end_site_name,
             goods_name,
-            vehicle_licenses,
+            vehicle.license,
             item.get_load_display(),
             item.quantity,
             item.unit,
@@ -1137,36 +861,62 @@ def end_excel(req: HttpRequest):
         cell.font = Font(bold=True)
         cell.alignment = Alignment(horizontal='center', vertical='center')
 
-    transport_summary = items.values(
+    # 初步查询，获取所需的基本信息
+    initial_query = items.values(
         'endsite_id',
         'goods_id',
-    ).annotate(
-        endPayment_sum=Sum('endPayment'),
-        cost_sum=Sum(F('quantity') * F('endPayment'), output_field=FloatField()),
+        'endPayment',
+        'quantity',
+        'vehicle_id',
     )
 
-    # Step 2: 使用Python逻辑合并vehicle_ids
-    # 创建一个默认字典保存聚合后结果
-    summary_dict = defaultdict(lambda: {'endPayment_sum': 0, 'cost_sum': 0, 'vehicle_ids': []})
+    # 准备聚合结果的字典
+    transport_summary_dict = defaultdict(lambda: {
+        'endPayment_sum': 0,
+        'cost_sum': 0,
+        'vehicle_ids': []
+    })
 
-    # 迭代原始对象，构建分组键和合并vehicle_ids
-    for item in items:
-        key = (item.endsite_id, item.goods_id)
-        summary_dict[key]['endPayment_sum'] += item.startSubsidy
-        summary_dict[key]['cost_sum'] += item.quantity * item.endPayment
-        if item.vehicle_ids:
-            summary_dict[key]['vehicle_ids'].extend(item.vehicle_ids)
+    # 循环处理每个初步查询的结果
+    for item in initial_query:
+        key = (item['endsite_id'], item['goods_id'])
+        transport_summary_dict[key]['endPayment_sum'] += item['endPayment']
+        transport_summary_dict[key]['cost_sum'] += item['quantity'] * item['endPayment']
+        transport_summary_dict[key]['vehicle_ids'].append(item['vehicle_id'])
 
-    # 转换结果为列表形式
-    result = []
-    for key, values in summary_dict.items():
-        result.append({
-            'endsite_id': key[0],
-            'goods_id': key[1],
-            'cost_sum': values['cost_sum'],
-            'vehicle_ids': values['vehicle_ids'],
+    # 将聚合结果转换为列表
+    transport_summary = []
+    for (endsite_id, goods_id), data in transport_summary_dict.items():
+        transport_summary.append({
+            'endsite_id': endsite_id,
+            'goods_id': goods_id,
+            'endPayment_sum': data['endPayment_sum'],
+            'cost_sum': data['cost_sum'],
+            'vehicle_ids': data['vehicle_ids'],
         })
-    row1 = sheet.max_row
+
+    # # Step 2: 使用Python逻辑合并vehicle_ids
+    # # 创建一个默认字典保存聚合后结果
+    # summary_dict = defaultdict(lambda: {'endPayment_sum': 0, 'cost_sum': 0, 'vehicle_ids': []})
+
+    # # 迭代原始对象，构建分组键和合并vehicle_ids
+    # for item in items:
+    #     key = (item.endsite_id, item.goods_id)
+    #     summary_dict[key]['endPayment_sum'] += item.startSubsidy
+    #     summary_dict[key]['cost_sum'] += item.quantity * item.endPayment
+    #     if item.vehicle_ids:
+    #         summary_dict[key]['vehicle_ids'].extend(item.vehicle_ids)
+
+    # # 转换结果为列表形式
+    # result = []
+    # for key, values in summary_dict.items():
+    #     result.append({
+    #         'endsite_id': key[0],
+    #         'goods_id': key[1],
+    #         'cost_sum': values['cost_sum'],
+    #         'vehicle_ids': values['vehicle_ids'],
+    #     })
+    # row1 = sheet.max_row
     total_sum1 = 0.0
     total_sum2 = 0.0
     for idx, item in enumerate(result, start=1):
@@ -1253,7 +1003,6 @@ def end_excel(req: HttpRequest):
     # 保存到内存
     local_file_path = "/root/cheliangyunshu/BE-vehicle/test/test.xlsx"
     workbook.save(local_file_path)
-    print(1)
     file_stream = io.BytesIO()
     workbook.save(file_stream)
     file_stream.seek(0)

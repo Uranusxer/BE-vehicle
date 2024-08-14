@@ -1,6 +1,7 @@
 import json
 from django.http import HttpRequest
 from parameter.models import Site,Goods,Vehicle,Pay,Project
+from item.models import Item
 from utils.utils_request import request_failed, request_success
 from utils.utils_require import CheckRequire, require
 from utils.utils_time import get_timestamp
@@ -31,10 +32,19 @@ def start_site_list(req:HttpRequest,per_page,page):
     # failure_response, user = get_user_from_request(req,'GET')
     # if failure_response:
     #     return failure_response
-    manager = req.GET.get('manager', None)
+    ownerName = req.GET.get('ownerName', None)
+    project_id = req.GET.get('project_id', None)
     site_list = Site.objects.filter(type=START,if_delete=False).order_by("-created_time")
-    if manager:
-        site_list = site_list.filter(manager=manager)
+    if ownerName:
+        project_list = Project.objects.filter(owner=ownerName,if_delete=False).order_by("-created_time")
+    if project_id:
+        project_list = Project.objects.filter(id=project_id,if_delete=False)
+    if ownerName or project_id:
+        project_ids = project_list.values_list('id', flat=True)
+        item_list = Item.objects.filter(project_id__in=project_ids,if_delete=False)  # Filter sites based on project IDs
+        siteid_list = [item.startsite_id for item in item_list]
+        site_list = Site.objects.filter(id__in=siteid_list, type=START, if_delete=False).order_by("-created_time")
+
     paginator = Paginator(site_list,per_page)
     site_page = paginator.get_page(page)
     return_data = [site.serialize() for site in site_page]
@@ -64,10 +74,20 @@ def end_site_list(req:HttpRequest,per_page,page):
     # failure_response, user = get_user_from_request(req,'GET')
     # if failure_response:
     #     return failure_response
-    manager = req.GET.get('manager', None)
+    ownerName = req.GET.get('ownerName', None)
+    project_id = req.GET.get('project_id', None)
     site_list = Site.objects.filter(type=END,if_delete=False).order_by("-created_time")
-    if manager:
-        site_list = site_list.filter(manager=manager)
+    if ownerName:
+        project_list = Project.objects.filter(owner=ownerName,if_delete=False).order_by("-created_time")
+    if project_id:
+        project_list = Project.objects.filter(id=project_id,if_delete=False)
+
+    if ownerName or project_id:
+        project_ids = project_list.values_list('id', flat=True)
+        item_list = Item.objects.filter(project_id__in=project_ids,if_delete=False)  # Filter sites based on project IDs
+        siteid_list = [item.endsite_id for item in item_list]
+        site_list = Site.objects.filter(id__in=siteid_list, type=END, if_delete=False).order_by("-created_time")
+
     paginator = Paginator(site_list,per_page)
     site_page = paginator.get_page(page)
     return_data = [site.serialize() for site in site_page]
