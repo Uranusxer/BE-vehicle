@@ -190,7 +190,7 @@ def change_project(req:HttpRequest):
     #     return failure_response
     body = json.loads(req.body.decode("utf-8"))
     project_id = require(body,"project_id","int",err_msg="Missing or error type of [project_id]")
-    project = Project.objects.filter(id=siteproject_id_id).first()
+    project = Project.objects.filter(id=project_id).first()
     if not project:
         return request_failed(code=1,info="Project does not exist",status_code=404)
     try:

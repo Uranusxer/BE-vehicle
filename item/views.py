@@ -19,7 +19,29 @@ from django.db.models import Sum, F, FloatField, Value
 from django.contrib.postgres.aggregates import ArrayAgg
 from django.db.models.functions import Coalesce
 from collections import defaultdict
+from datetime import datetime
+import pytz
+import tempfile
+import pypandoc
+import os
+import subprocess
+import fitz
+from openpyxl.worksheet.page import PageMargins, PrintPageSetup
 
+def convert_utc_to_china_time(utc_time_str):
+    # 将字符串转换为 datetime 对象
+    utc_time = datetime.strptime(utc_time_str, '%Y-%m-%dT%H:%M:%S.%fZ')
+    
+    # 设置时区为 UTC
+    utc_time = utc_time.replace(tzinfo=pytz.utc)
+    
+    # 转换到东八区中国时间
+    china_time = utc_time.astimezone(pytz.timezone('Asia/Shanghai'))
+    
+    # 仅保留日期部分
+    china_date_str = china_time.strftime('%Y-%m-%d')
+    
+    return china_date_str
 
 def num2cn(n):
     # 定义中文数字和单位
@@ -262,7 +284,7 @@ def search4item(req:HttpRequest,per_page,page):
     if endsite_id is not None:
         items = items.filter(endsite_id=endsite_id)
     if vehicle_id is not None:
-        items = items.filter(vehicel_id=vehicle_id)
+        items = items.filter(vehicle_id=vehicle_id)
 
     if goods_id is not None:
         items = items.filter(goods_id=goods_id)
@@ -395,8 +417,8 @@ def start_excel(req: HttpRequest):
             return request_failed(code=3, info="Project not found", status_code=404)
     
     # 转换日期格式，假设传入的日期格式为"2024-07-03T16:00:00.000Z"
-    start_date = start_date.split('T')[0]
-    end_date = end_date.split('T')[0]
+    start_date = convert_utc_to_china_time(start_date).split('T')[0]
+    end_date = convert_utc_to_china_time(end_date).split('T')[0]
     
     # 获取过滤的Item
     items = Item.objects.filter(id__in=item_ids, if_delete=False)
@@ -404,7 +426,7 @@ def start_excel(req: HttpRequest):
     # 创建Excel工作簿
     workbook = Workbook()
     sheet = workbook.active
-    sheet.title = "宏途清运起点对账单"
+    sheet.title = "宏途清运公司对账单"
     default_font = Font(size=12)
     def set_font_and_alignment(cell):
         cell.font = default_font
@@ -431,9 +453,9 @@ def start_excel(req: HttpRequest):
     # 添加表头
     sheet.merge_cells('A1:L1')
     title_cell = sheet['A1']
-    title_cell.value = "宏途清运起点对账单"
+    title_cell.value = "宏途清运公司对账单"
     title_cell.alignment = Alignment(horizontal='center', vertical='center')
-    title_cell.font = Font(size=24, bold=True)
+    title_cell.font = Font(size=20, bold=True)
 
 
     # 固定的表头信息
@@ -490,7 +512,7 @@ def start_excel(req: HttpRequest):
         total_price = item.quantity * item.contractorPrice
         row = [
             idx,
-            item.date.split('T')[0],
+            convert_utc_to_china_time(item.date).split('T')[0],
             "",
             start_site_name,
             goods_name,
@@ -532,12 +554,13 @@ def start_excel(req: HttpRequest):
     
     
     # 运输品类合计
-    headers = ["","","序号", "运输起点", "品类", "车队", "总金额", "","","","","起点补贴金额"]
+    headers = ["","","序号", "运输起点", "品类", "车队", "合计数量","","总金额","","","起点补贴金额"]
     sheet.append(headers)
 
     current_row = sheet.max_row
-    sheet.merge_cells(f'G{current_row}:K{current_row}')
-    
+    sheet.merge_cells(f'G{current_row}:H{current_row}')
+    sheet.merge_cells(f'I{current_row}:K{current_row}')
+
     for cell in sheet[current_row]:
         cell.font = Font(bold=True)
         cell.alignment = Alignment(horizontal='center', vertical='center')
@@ -556,6 +579,7 @@ def start_excel(req: HttpRequest):
     transport_summary_dict = defaultdict(lambda: {
         'start_subsidy_sum': 0,
         'cost_sum': 0,
+        'quantity_sum': 0,
         'vehicle_ids': []
     })
 
@@ -564,6 +588,7 @@ def start_excel(req: HttpRequest):
         key = (item['startsite_id'], item['goods_id'])
         transport_summary_dict[key]['start_subsidy_sum'] += item['startSubsidy']
         transport_summary_dict[key]['cost_sum'] += item['quantity'] * item['contractorPrice']
+        transport_summary_dict[key]['quantity_sum'] += item['quantity']
         transport_summary_dict[key]['vehicle_ids'].append(item['vehicle_id'])
 
     # 将聚合结果转换为列表
@@ -573,6 +598,7 @@ def start_excel(req: HttpRequest):
             'startsite_id': startsite_id,
             'goods_id': goods_id,
             'start_subsidy_sum': data['start_subsidy_sum'],
+            'quantity_sum': data['quantity_sum'],
             'cost_sum': data['cost_sum'],
             'vehicle_ids': data['vehicle_ids'],
         })
@@ -620,16 +646,17 @@ def start_excel(req: HttpRequest):
             start_site_name,
             goods_name,
             vehicle_names,
+            item['quantity_sum'],
+            "",
             item['cost_sum'],
-            "",
-            "",
             "",
             "",
             item['start_subsidy_sum']
         ]
         sheet.append(row)
         current_row = sheet.max_row
-        sheet.merge_cells(f'G{current_row}:K{current_row}')
+        sheet.merge_cells(f'G{current_row}:H{current_row}')
+        sheet.merge_cells(f'I{current_row}:K{current_row}')
         
         for cell in sheet[current_row]:
             cell.alignment = Alignment(horizontal='center', vertical='center')
@@ -675,7 +702,7 @@ def start_excel(req: HttpRequest):
 
     # # 保存到本地
     for row in sheet.iter_rows():
-        sheet.row_dimensions[row[0].row].height = 15
+        sheet.row_dimensions[row[0].row].height = 18.5
         for cell in row:
             if not cell.font:
                 set_font_and_alignment(cell)
@@ -685,9 +712,7 @@ def start_excel(req: HttpRequest):
     sheet.row_dimensions[sheet.max_row].height = 22  
     sheet.row_dimensions[sheet.max_row-2].height = 30  
     # return request_success()
-    # 保存到内存
-    local_file_path = "/root/cheliangyunshu/BE-vehicle/test/test.xlsx"
-    workbook.save(local_file_path)
+
     file_stream = io.BytesIO()
     workbook.save(file_stream)
     file_stream.seek(0)
@@ -696,6 +721,308 @@ def start_excel(req: HttpRequest):
     response['Content-Disposition'] = 'attachment;filename=transport_statement.xlsx'
     return response
 
+@CheckRequire
+def start_excel_pdf(req: HttpRequest):
+    body = json.loads(req.body.decode("utf-8"))
+    item_ids = require(body, "item_ids", "list", err_msg="Missing or error type of [item_ids]")
+    project_id = require(body, "project_id", "int", err_msg="Missing or error type of [project_id]")
+    start_date = require(body, "start_date", "string", err_msg="Missing或error type of [start_date]")
+    end_date = require(body, "end_date", "string", err_msg="Missing或error type of [end_date]")
+
+    if project_id == 0:
+        project = None
+    else:
+        project = Project.objects.filter(id=project_id).first()
+        if not project:
+            return request_failed(code=3, info="Project not found", status_code=404)
+
+    start_date = convert_utc_to_china_time(start_date).split('T')[0]
+    end_date = convert_utc_to_china_time(end_date).split('T')[0]
+    items = Item.objects.filter(id__in=item_ids, if_delete=False)
+    
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "宏途清运公司对账单"
+    default_font = Font(size=12)
+    border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+
+    def set_font_and_alignment(cell):
+        cell.font = default_font
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.border = border
+
+    column_widths = {
+        'A': 10.41,    # 序号
+        'B': 8.17,   # 起始日期
+        'C': 11.29,   # 合并单元格"起始日期"
+        'D': 26.29,   # 运输起点
+        'E': 12.14,   # 品类
+        'F': 40.15,   # 项目老板名
+        'G': 12.68,   # 装车方式
+        'H': 8.49,   # 数量
+        'I': 8.49,   # 单位
+        'J': 16.87,   # 工地承接单价
+        'K': 10.58,   # 总金额
+        'L': 16.87,   # 起点补贴金额
+    }
+
+    for col_letter, width in column_widths.items():
+        sheet.column_dimensions[col_letter].width = width
+
+    sheet.merge_cells('A1:L1')
+    title_cell = sheet['A1']
+    title_cell.value = "宏途清运公司对账单"
+    title_cell.alignment = Alignment(horizontal='center', vertical='center')
+    title_cell.font = Font(size=20, bold=True)
+    title_cell.border = border
+
+    # 添加表头
+    sheet.merge_cells('A1:L1')
+    title_cell = sheet['A1']
+    title_cell.value = "宏途清运公司对账单"
+    title_cell.alignment = Alignment(horizontal='center', vertical='center')
+    title_cell.font = Font(size=20, bold=True)
+
+
+    # 固定的表头信息
+    sheet.merge_cells('A2:C2')
+    sheet.merge_cells('D2:E2')
+    sheet.merge_cells('G2:L2')
+    sheet.merge_cells('A3:C3')
+    sheet.merge_cells('D3:E3')
+    sheet.merge_cells('G3:L3')
+    sheet.merge_cells('A4:C4')
+    sheet.merge_cells('D4:E4')
+    sheet.merge_cells('G4:L4')
+
+    
+    sheet['A2'] = "项 目 名 称"
+    sheet['D2'] = project.name if project else None
+    sheet['F2'] = "项 目 老 板 名 称"
+    sheet['G2'] = project.owner if project else None
+    sheet['A3'] = "对 账 起 始 日 期"
+    sheet['D3'] = start_date
+    sheet['F3'] = "对 账 截 止 日 期"
+    sheet['G3'] = end_date
+    sheet['A4'] = "运 输 单 位 名 称"
+    sheet['D4'] = "南平市宏途渣土清运有限公司"
+    sheet['F4'] = "公 司 负 责 人"
+    sheet['G4'] = "吴 春 才 18905996295"
+    
+    for row in sheet['A2:L4']:
+        for cell in row:
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.font = Font(bold=True)
+            cell.border = border
+
+    headers = ["序号", "日期", "", "运输起点", "品类", "车队", "装车方式", "数量", "单位", "工地承接单价", "总金额", "起点补贴金额"]
+    sheet.append(headers)
+
+    current_row = sheet.max_row
+    sheet.merge_cells(f'B{current_row}:C{current_row}')
+
+    # Fill header row with font and alignment
+    for cell in sheet[current_row]:
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = border
+
+    total_amount = 0
+    for idx, item in enumerate(items, start=1):
+        start_site = Site.objects.filter(id=item.startsite_id).first()
+        start_site_name = start_site.name if start_site else "无"
+        goods = Goods.objects.filter(id=item.goods_id).first()
+        goods_name = goods.name if goods else "无"
+        vehicle = Vehicle.objects.filter(id=item.vehicle_id).first()
+        total_price = item.quantity * item.contractorPrice
+        row = [
+            idx,
+            convert_utc_to_china_time(item.date).split('T')[0],
+            "",
+            start_site_name,
+            goods_name,
+            vehicle.license,
+            item.get_load_display(),
+            item.quantity,
+            item.unit,
+            item.contractorPrice,
+            total_price,
+            item.startSubsidy
+        ]
+        sheet.append(row)
+        current_row = sheet.max_row
+        sheet.merge_cells(f'B{current_row}:C{current_row}')
+
+        for cell in sheet[current_row]:
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.border = border
+
+        total_amount += total_price
+
+    total_cn = num2cn(total_amount)
+    sheet.append(["总 计 金 额", "", "", total_amount, "", "总 计 大 写 (金 额)", total_cn])
+    current_row = sheet.max_row
+    sheet.merge_cells(f'A{current_row}:C{current_row}')
+    sheet.merge_cells(f'D{current_row}:E{current_row}')
+    sheet.merge_cells(f'G{current_row}:L{current_row}')
+    for cell in sheet[current_row]:
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.border = border
+
+    headers = ["", "", "序号", "运输起点", "品类", "车队", "合计数量", "", "总金额", "", "", "起点补贴金额"]
+    sheet.append(headers)
+
+    current_row = sheet.max_row
+    sheet.merge_cells(f'G{current_row}:H{current_row}')
+    sheet.merge_cells(f'I{current_row}:K{current_row}')
+
+    for cell in sheet[current_row]:
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.border = border
+
+    initial_query = items.values(
+        'startsite_id',
+        'goods_id',
+        'startSubsidy',
+        'quantity',
+        'contractorPrice',
+        'vehicle_id',
+    )
+
+    transport_summary_dict = defaultdict(lambda: {
+        'start_subsidy_sum': 0,
+        'cost_sum': 0,
+        'quantity_sum': 0,
+        'vehicle_ids': []
+    })
+
+    for item in initial_query:
+        key = (item['startsite_id'], item['goods_id'])
+        transport_summary_dict[key]['start_subsidy_sum'] += item['startSubsidy']
+        transport_summary_dict[key]['cost_sum'] += item['quantity'] * item['contractorPrice']
+        transport_summary_dict[key]['quantity_sum'] += item['quantity']
+        transport_summary_dict[key]['vehicle_ids'].append(item['vehicle_id'])
+
+    transport_summary = []
+    for (startsite_id, goods_id), data in transport_summary_dict.items():
+        transport_summary.append({
+            'startsite_id': startsite_id,
+            'goods_id': goods_id,
+            'start_subsidy_sum': data['start_subsidy_sum'],
+            'quantity_sum': data['quantity_sum'],
+            'cost_sum': data['cost_sum'],
+            'vehicle_ids': data['vehicle_ids'],
+        })
+
+    row1 = sheet.max_row
+    total_sum1 = 0.0
+    total_sum2 = 0.0
+    for idx, item in enumerate(transport_summary, start=1):
+        start_site = Site.objects.filter(id=item['startsite_id']).first()
+        start_site_name = start_site.name if start_site else "无"
+        goods = Goods.objects.filter(id=item['goods_id']).first()
+        goods_name = goods.name if goods else "无"
+        vehicle_ids = item['vehicle_ids'][:3]  # 取前3个vehicle_ids
+        vehicles = Vehicle.objects.filter(id__in=vehicle_ids)
+        vehicle_names = '，'.join([vehicle.license for vehicle in vehicles])
+        total_sum1 += item['cost_sum']
+        total_sum2 += item['start_subsidy_sum']
+        row = [
+            "",
+            "",
+            idx,
+            start_site_name,
+            goods_name,
+            vehicle_names,
+            item['quantity_sum'],
+            "",
+            item['cost_sum'],
+            "",
+            "",
+            item['start_subsidy_sum']
+        ]
+        sheet.append(row)
+        current_row = sheet.max_row
+        sheet.merge_cells(f'G{current_row}:H{current_row}')
+        sheet.merge_cells(f'I{current_row}:K{current_row}')
+
+        for cell in sheet[current_row]:
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.border = border
+
+    sheet.append(["", "", "合计", "-", "-", "-", total_sum1, "", "", "", "", total_sum2])
+    current_row = sheet.max_row
+    sheet.merge_cells(f'G{current_row}:K{current_row}')
+    for cell in sheet[current_row]:
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.border = border
+
+    row2 = sheet.max_row
+    sheet.merge_cells(start_row=row1, start_column=1, end_row=row2, end_column=2)
+    cell = sheet.cell(row=row1, column=1)
+    cell.value = "运输品类合计"
+    cell.font = Font(bold=True)
+    cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    cell.border = border
+
+    # Final Information rows
+    sheet.append(["工 地 负 责 人（ 签 字 确 认 ) ：", "", "", "", "", "运 输 单 位 负 责 人 ( 签 字 确 认 ) ："])
+    current_row = sheet.max_row
+    sheet.merge_cells(f'A{current_row}:E{current_row}')
+    sheet.merge_cells(f'F{current_row}:L{current_row}')
+    for cell in sheet[current_row]:
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal='left', vertical='center')
+        cell.border = border
+
+    sheet.append(["经 营 范 围 ： 建筑垃圾清运，砂石料运输及销售，供应铺路石渣，云梯车租赁。"])
+    current_row = sheet.max_row
+    sheet.merge_cells(f'A{current_row}:L{current_row}')
+    for cell in sheet[current_row]:
+        cell.font = Font(bold=True)
+        cell.border = border
+
+    sheet.append(["立 信 于 心 ， 尽 责 至 善！"])
+    centered_row = sheet.max_row
+    sheet.merge_cells(f'A{centered_row}:L{centered_row}')
+    for cell in sheet[centered_row]:
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.font = Font(size=16, bold=True)
+        cell.border = border
+
+    for row in sheet.iter_rows():
+        sheet.row_dimensions[row[0].row].height = 18.5
+        for cell in row:
+            if not cell.font:
+                set_font_and_alignment(cell)
+    sheet.row_dimensions[1].height = 25  
+    sheet.row_dimensions[2].height = 25  
+    sheet.row_dimensions[3].height = 25  
+    sheet.row_dimensions[sheet.max_row].height = 22  
+    sheet.row_dimensions[sheet.max_row-2].height = 30  
+
+     # 增加缩放比例
+    sheet.page_setup.scale = 48  # 设置缩放比例为 48%
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp_xlsx:
+        workbook.save(tmp_xlsx.name)
+        tmp_xlsx_path = tmp_xlsx.name
+    
+    pdf_path = tmp_xlsx_path.replace('.xlsx', '.pdf')  # 临时 PDF 文件路径
+
+    # 使用 unoconv 将 xlsx 转换为 pdf
+    subprocess.run(['unoconv', '-f', 'pdf', tmp_xlsx_path])
+
+    with open(pdf_path, 'rb') as pdf_file:
+        response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+        response['Content-Disposition'] = 'attachment;filename=transport_statement.pdf'
+
+    # 删除临时文件
+    os.remove(tmp_xlsx_path)
+    os.remove(pdf_path)  # 可选，保留 pdf 文件进行排查
+
+    return response
 
 
 @CheckRequire
@@ -716,8 +1043,8 @@ def end_excel(req: HttpRequest):
             return request_failed(code=3, info="Project not found", status_code=404)
     
     # 转换日期格式，假设传入的日期格式为"2024-07-03T16:00:00.000Z"
-    start_date = start_date.split('T')[0]
-    end_date = end_date.split('T')[0]
+    start_date = convert_utc_to_china_time(start_date).split('T')[0]
+    end_date = convert_utc_to_china_time(end_date).split('T')[0]
     
     # 获取过滤的Item
     items = Item.objects.filter(id__in=item_ids, if_delete=False)
@@ -725,7 +1052,7 @@ def end_excel(req: HttpRequest):
     # 创建Excel工作簿
     workbook = Workbook()
     sheet = workbook.active
-    sheet.title = "宏途清运终点对账单"
+    sheet.title = "宏途清运公司对账单"
     default_font = Font(size=12)
     def set_font_and_alignment(cell):
         cell.font = default_font
@@ -751,9 +1078,9 @@ def end_excel(req: HttpRequest):
     # 添加表头
     sheet.merge_cells('A1:K1')
     title_cell = sheet['A1']
-    title_cell.value = "宏途清运终点对账单"
+    title_cell.value = "宏途清运公司对账单"
     title_cell.alignment = Alignment(horizontal='center', vertical='center')
-    title_cell.font = Font(size=24, bold=True)
+    title_cell.font = Font(size=20, bold=True)
 
 
     # 固定的表头信息
@@ -810,7 +1137,7 @@ def end_excel(req: HttpRequest):
         total_price = item.quantity * item.endPayment
         row = [
             idx,
-            item.date.split('T')[0],
+            convert_utc_to_china_time(item.date).split('T')[0],
             "",
             end_site_name,
             goods_name,
@@ -851,12 +1178,13 @@ def end_excel(req: HttpRequest):
     
     
     # 运输品类合计
-    headers = ["","","序号", "运输起点", "品类", "车队", "总金额", "","","",""]
+    headers = ["","","序号", "运输起点", "品类", "车队", "合计数量","","总金额","",""]
     sheet.append(headers)
 
     current_row = sheet.max_row
-    sheet.merge_cells(f'G{current_row}:K{current_row}')
-    
+    sheet.merge_cells(f'G{current_row}:H{current_row}')
+    sheet.merge_cells(f'I{current_row}:K{current_row}')
+
     for cell in sheet[current_row]:
         cell.font = Font(bold=True)
         cell.alignment = Alignment(horizontal='center', vertical='center')
@@ -874,6 +1202,7 @@ def end_excel(req: HttpRequest):
     transport_summary_dict = defaultdict(lambda: {
         'endPayment_sum': 0,
         'cost_sum': 0,
+        'quantity_sum': 0,
         'vehicle_ids': []
     })
 
@@ -882,6 +1211,7 @@ def end_excel(req: HttpRequest):
         key = (item['endsite_id'], item['goods_id'])
         transport_summary_dict[key]['endPayment_sum'] += item['endPayment']
         transport_summary_dict[key]['cost_sum'] += item['quantity'] * item['endPayment']
+        transport_summary_dict[key]['quantity_sum'] += item['quantity']
         transport_summary_dict[key]['vehicle_ids'].append(item['vehicle_id'])
 
     # 将聚合结果转换为列表
@@ -891,6 +1221,7 @@ def end_excel(req: HttpRequest):
             'endsite_id': endsite_id,
             'goods_id': goods_id,
             'endPayment_sum': data['endPayment_sum'],
+            'quantity_sum': data['quantity_sum'],
             'cost_sum': data['cost_sum'],
             'vehicle_ids': data['vehicle_ids'],
         })
@@ -916,10 +1247,10 @@ def end_excel(req: HttpRequest):
     #         'cost_sum': values['cost_sum'],
     #         'vehicle_ids': values['vehicle_ids'],
     #     })
-    # row1 = sheet.max_row
+    row1 = sheet.max_row    
     total_sum1 = 0.0
     total_sum2 = 0.0
-    for idx, item in enumerate(result, start=1):
+    for idx, item in enumerate(transport_summary, start=1):
         end_site = Site.objects.filter(id=item['endsite_id']).first()
         end_site_name = end_site.name if end_site else "无"
         goods = Goods.objects.filter(id=item['goods_id']).first()
@@ -936,16 +1267,16 @@ def end_excel(req: HttpRequest):
             end_site_name,
             goods_name,
             vehicle_names,
+            item['quantity_sum'],
+            "",
             item['cost_sum'],
-            "",
-            "",
             "",
             ""
         ]
         sheet.append(row)
         current_row = sheet.max_row
-        sheet.merge_cells(f'G{current_row}:K{current_row}')
-        
+        sheet.merge_cells(f'G{current_row}:H{current_row}')
+        sheet.merge_cells(f'I{current_row}:K{current_row}')
         for cell in sheet[current_row]:
             cell.alignment = Alignment(horizontal='center', vertical='center')
 
@@ -990,7 +1321,7 @@ def end_excel(req: HttpRequest):
 
     # # 保存到本地
     for row in sheet.iter_rows():
-        sheet.row_dimensions[row[0].row].height = 15
+        sheet.row_dimensions[row[0].row].height = 18.5
         for cell in row:
             if not cell.font:
                 set_font_and_alignment(cell)
@@ -1000,13 +1331,294 @@ def end_excel(req: HttpRequest):
     sheet.row_dimensions[sheet.max_row].height = 22  
     sheet.row_dimensions[sheet.max_row-2].height = 30  
     # return request_success()
-    # 保存到内存
-    local_file_path = "/root/cheliangyunshu/BE-vehicle/test/test.xlsx"
-    workbook.save(local_file_path)
+
     file_stream = io.BytesIO()
     workbook.save(file_stream)
     file_stream.seek(0)
     
     response = HttpResponse(file_stream, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = 'attachment;filename=transport_statement.xlsx'
+    return response
+
+
+@CheckRequire
+def end_excel_pdf(req: HttpRequest):
+    body = json.loads(req.body.decode("utf-8"))
+    item_ids = require(body, "item_ids", "list", err_msg="Missing or error type of [item_ids]")
+    project_id = require(body, "project_id", "int", err_msg="Missing or error type of [project_id]")
+    start_date = require(body, "start_date", "string", err_msg="Missing or error type of [start_date]")
+    end_date = require(body, "end_date", "string", err_msg="Missing or error type of [end_date]")
+
+    if project_id == 0:
+        project = None
+    else:
+        project = Project.objects.filter(id=project_id).first()
+        if not project:
+            return request_failed(code=3, info="Project not found", status_code=404)
+
+    start_date = convert_utc_to_china_time(start_date).split('T')[0]
+    end_date = convert_utc_to_china_time(end_date).split('T')[0]
+
+    items = Item.objects.filter(id__in=item_ids, if_delete=False)
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "宏途清运公司对账单"
+
+    default_font = Font(size=12)
+    thin_border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+
+    # Function to set fonts, alignments, and borders
+    def set_font_and_alignment(cell):
+        cell.font = default_font
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.border = thin_border
+
+    column_widths = {
+        'A': 10.41, 'B': 8.17, 'C': 11.29, 'D': 26.29, 'E': 12.14,
+        'F': 40.15, 'G': 12.68, 'H': 8.49, 'I': 8.49, 'J': 16.87, 'K': 10.58
+    }
+
+    for col_letter, width in column_widths.items():
+        sheet.column_dimensions[col_letter].width = width
+
+    sheet.merge_cells('A1:K1')
+    title_cell = sheet['A1']
+    title_cell.value = "宏途清运公司对账单"
+    title_cell.alignment = Alignment(horizontal='center', vertical='center')
+    title_cell.font = Font(size=20, bold=True)
+    title_cell.border = thin_border
+    sheet['K1'].border = thin_border
+    sheet.merge_cells('A2:C2')
+    sheet.merge_cells('D2:E2')
+    sheet.merge_cells('G2:K2')
+    sheet.merge_cells('A3:C3')
+    sheet.merge_cells('D3:E3')
+    sheet.merge_cells('G3:K3')
+    sheet.merge_cells('A4:C4')
+    sheet.merge_cells('D4:E4')
+    sheet.merge_cells('G4:K4')
+
+    sheet['A2'] = "项 目 名 称"
+    sheet['D2'] = project.name if project else None
+    sheet['F2'] = "项 目 老 板 名 称"
+    sheet['G2'] = project.owner if project else None
+    sheet['A3'] = "对 账 起 始 日 期"
+    sheet['D3'] = start_date
+    sheet['F3'] = "对 账 截 止 日 期"
+    sheet['G3'] = end_date
+    sheet['A4'] = "运 输 单 位 名 称"
+    sheet['D4'] = "南平市宏途渣土清运有限公司"
+    sheet['F4'] = "公 司 负 责 人"
+    sheet['G4'] = "吴 春 才 18905996295"
+    
+    for row in sheet['A2:K4']:
+        for cell in row:
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.font = Font(bold=True)
+            cell.border = thin_border
+
+    headers = ["序号", "日期", "", "运输起点", "品类", "车队", "装车方式", "数量", "单位", "终点付费金额", "总金额"]
+    sheet.append(headers)
+
+    current_row = sheet.max_row
+    sheet.merge_cells(f'B{current_row}:C{current_row}')
+
+    for cell in sheet[current_row]:
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+
+    total_amount = 0
+    for idx, item in enumerate(items, start=1):
+        end_site = Site.objects.filter(id=item.endsite_id).first()
+        end_site_name = end_site.name if end_site else "无"
+        goods = Goods.objects.filter(id=item.goods_id).first()
+        goods_name = goods.name if goods else "无"
+        vehicle = Vehicle.objects.filter(id=item.vehicle_id).first()
+        total_price = item.quantity * item.endPayment
+
+        row = [
+            idx,
+            convert_utc_to_china_time(item.date).split('T')[0],
+            "",
+            end_site_name,
+            goods_name,
+            vehicle.license,
+            item.get_load_display(),
+            item.quantity,
+            item.unit,
+            item.endPayment,
+            total_price
+        ]
+
+        sheet.append(row)
+        current_row = sheet.max_row
+        sheet.merge_cells(f'B{current_row}:C{current_row}')
+
+        for cell in sheet[current_row]:
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.border = thin_border
+
+        total_amount += total_price
+
+    total_cn = num2cn(total_amount)
+    sheet.append(["总 计 金 额", "", "", total_amount, "", "总 计 大 写 (金 额)",total_cn])
+    current_row = sheet.max_row
+    sheet.merge_cells(f'A{current_row}:C{current_row}')
+    sheet.merge_cells(f'D{current_row}:E{current_row}')
+    sheet.merge_cells(f'G{current_row}:K{current_row}')
+    for cell in sheet[current_row]:
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.border = thin_border
+
+    headers = ["","","序号", "运输起点", "品类", "车队", "合计数量","","总金额","",""]
+    sheet.append(headers)
+    current_row = sheet.max_row
+    sheet.merge_cells(f'G{current_row}:H{current_row}')
+    sheet.merge_cells(f'I{current_row}:K{current_row}')
+    for cell in sheet[current_row]:
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+
+    initial_query = items.values(
+        'endsite_id',
+        'goods_id',
+        'endPayment',
+        'quantity',
+        'vehicle_id'
+    )
+
+    transport_summary_dict = defaultdict(lambda: {
+        'endPayment_sum': 0,
+        'cost_sum': 0,
+        'quantity_sum': 0,
+        'vehicle_ids': []
+    })
+
+    for item in initial_query:
+        key = (item['endsite_id'], item['goods_id'])
+        transport_summary_dict[key]['endPayment_sum'] += item['endPayment']
+        transport_summary_dict[key]['cost_sum'] += item['quantity'] * item['endPayment']
+        transport_summary_dict[key]['quantity_sum'] += item['quantity']
+        transport_summary_dict[key]['vehicle_ids'].append(item['vehicle_id'])
+
+    transport_summary = []
+    for (endsite_id, goods_id), data in transport_summary_dict.items():
+        transport_summary.append({
+            'endsite_id': endsite_id,
+            'goods_id': goods_id,
+            'endPayment_sum': data['endPayment_sum'],
+            'quantity_sum': data['quantity_sum'],
+            'cost_sum': data['cost_sum'],
+            'vehicle_ids': data['vehicle_ids'],
+        })
+
+    row1 = sheet.max_row    
+    total_sum1 = 0.0
+    total_sum2 = 0.0
+    for idx, item in enumerate(transport_summary, start=1):
+        end_site = Site.objects.filter(id=item['endsite_id']).first()
+        end_site_name = end_site.name if end_site else "无"
+        goods = Goods.objects.filter(id=item['goods_id']).first()
+        goods_name = goods.name if goods else "无"
+        vehicle_ids = item['vehicle_ids'][:3]
+        vehicles = Vehicle.objects.filter(id__in=vehicle_ids)
+        vehicle_names = '，'.join(vehicle.license for vehicle in vehicles)
+
+        total_sum1 += item['cost_sum']
+        row = [
+            "",
+            "",
+            idx,
+            end_site_name,
+            goods_name,
+            vehicle_names,
+            item['quantity_sum'],
+            "",
+            item['cost_sum'],
+            "",
+            ""
+        ]
+        sheet.append(row)
+        current_row = sheet.max_row
+        sheet.merge_cells(f'G{current_row}:H{current_row}')
+        sheet.merge_cells(f'I{current_row}:K{current_row}')
+        for cell in sheet[current_row]:
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.border = thin_border
+
+    sheet.append(["","","合计","-","-","-",total_sum1,"","","",""])
+    current_row = sheet.max_row
+    sheet.merge_cells(f'G{current_row}:K{current_row}')
+    for cell in sheet[current_row]:
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+
+    row2 = sheet.max_row
+    sheet.merge_cells(start_row=row1, start_column=1, end_row=row2, end_column=2)
+    cell = sheet.cell(row=row1, column=1)
+    cell.value = "运输品类合计"
+    cell.font = Font(bold=True)
+    cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    cell.border = thin_border
+
+    sheet.append(["工 地 负 责 人（ 签 字 确 认 ) ：","","","","","运 输 单 位 负 责 人 (  签 字 确 认 ) ："])
+    current_row = sheet.max_row
+    sheet.merge_cells(f'A{current_row}:E{current_row}')
+    sheet.merge_cells(f'F{current_row}:K{current_row}')
+    for cell in sheet[current_row]:
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal='left', vertical='center')
+        cell.border = thin_border
+    
+    sheet.append(["经 营 范 围 ： 建筑垃圾清运，砂石料运输及销售，供应铺路石渣，云梯车租赁。"])
+    current_row = sheet.max_row
+    sheet.merge_cells(f'A{current_row}:K{current_row}')
+    for cell in sheet[current_row]:
+        cell.font = Font(bold=True)
+        cell.border = thin_border
+    
+    sheet.append(["立 信 于 心 ， 尽 责 至 善！"])
+    centered_row = sheet.max_row
+    sheet.merge_cells(f'A{centered_row}:K{centered_row}')
+    for cell in sheet[centered_row]:
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.font = Font(size=16, bold=True)
+        cell.border = thin_border
+
+    for row in sheet.iter_rows():
+        sheet.row_dimensions[row[0].row].height = 18.5
+        for cell in row:
+            if not cell.font:
+                set_font_and_alignment(cell)
+    sheet.row_dimensions[1].height = 25  
+    sheet.row_dimensions[2].height = 25  
+    sheet.row_dimensions[3].height = 25  
+    sheet.row_dimensions[sheet.max_row].height = 22  
+    sheet.row_dimensions[sheet.max_row-2].height = 30  
+
+    sheet.page_setup.scale = 53
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp_xlsx:
+        workbook.save(tmp_xlsx.name)
+        tmp_xlsx_path = tmp_xlsx.name
+    
+    pdf_path = tmp_xlsx_path.replace('.xlsx', '.pdf')
+
+    subprocess.run(['unoconv', '-f', 'pdf', tmp_xlsx_path])
+
+    with open(pdf_path, 'rb') as pdf_file:
+        response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+        response['Content-Disposition'] = 'attachment;filename=transport_statement.pdf'
+
+    os.remove(tmp_xlsx_path)
+    os.remove(pdf_path)
+
     return response

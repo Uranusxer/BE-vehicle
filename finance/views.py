@@ -7,7 +7,7 @@ from utils.utils_require import CheckRequire, require
 from utils.utils_time import get_timestamp
 from django.core.paginator import Paginator
 from user.models import User,get_user_from_request
-from finance.models import Advance
+from finance.models import Advance,Payment
 from utils.constants import START,END
 import json
 from django.http import JsonResponse
@@ -18,7 +18,10 @@ import re
 import io
 from openpyxl.styles import Alignment, Font, Border, Side
 from django.http import HttpRequest, HttpResponse
-
+from openpyxl.styles import Font, Alignment, Border, Side
+import tempfile
+import subprocess
+import os
 @CheckRequire
 def advance(req:HttpRequest):
     # failure_response, user = get_user_from_request(req,'POST')
@@ -134,6 +137,7 @@ def search4advance(req:HttpRequest,per_page,page):
 def total_amount(req:HttpRequest):
     project_owner = req.GET.get('ownerName', None)
     project_id = req.GET.get('project_id', None)
+    goods_id = req.GET.get('goods_id', None)
     startsite_id = req.GET.get('startsite_id',None)
     endsite_id = req.GET.get('endsite_id',None)
     start_date = req.GET.get('start_date',None)
@@ -144,7 +148,8 @@ def total_amount(req:HttpRequest):
         items = items.filter(project_id__in=project_ids)
     if project_id is not None:
         items = items.filter(project_id=project_id)
-
+    if goods_id is not None:
+        items = items.filter(goods_id=goods_id)
     if startsite_id is not None:
         items = items.filter(startsite_id=startsite_id)
     if endsite_id is not None:
@@ -231,8 +236,8 @@ def driver_excel(req:HttpRequest):
         'E': 10,    # 品类
         'F': 8,    # 数量
         'G': 8,    # 单位
-        'H': 8,     # 装车方式
-        'I': 10,     # 给司机单价
+        'H': 10.75,     # 装车方式
+        'I': 20,     # 给司机单价
         'J': 8,    # 金额
     }
 
@@ -240,21 +245,28 @@ def driver_excel(req:HttpRequest):
         sheet.column_dimensions[col_letter].width = width
     
     # 固定的表头信息
-    sheet.merge_cells('A1:B1')
-    sheet.merge_cells('E1:G1')
-    sheet.merge_cells('H1:J1')
 
-    sheet['A1'] = f"车牌号：{vehicle.license}"
-    sheet['C1'] = f"驾驶员：{vehicle.driver}"
-    sheet['D1'] = f"电话：{vehicle.phone}"
-    sheet['E1'] = f"起始日期：{start_date}"
-    sheet['H1'] = f"截止日期：{end_date}"
+    sheet.merge_cells('A1:J1')
+    title_cell = sheet['A1']
+    title_cell.value = "宏途清运司机对账单"
+    title_cell.alignment = Alignment(horizontal='center', vertical='center')
+    title_cell.font = Font(size=16, bold=True)
+
+    sheet.merge_cells('A2:B2')
+    sheet.merge_cells('E2:G2')
+    sheet.merge_cells('H2:J2')
+
+    sheet['A2'] = f"车牌号：{vehicle.license}"
+    sheet['C2'] = f"驾驶员：{vehicle.driver}"
+    sheet['D2'] = f"电话：{vehicle.phone}"
+    sheet['E2'] = f"起始日期：{start_date}"
+    sheet['H2'] = f"截止日期：{end_date}"
     # 将第一行的字体设置为加粗，居中
-    for row in sheet['A1:J1']:
+    for row in sheet['A2:J2']:
         for cell in row:
             cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.font = Font(bold=True)
-
+    
     # 获取所有items
     items = Item.objects.filter(vehicle_id=vehicle_id, if_delete=False)
     headers = ["序号", "日期", "运输起点", "运输终点", "品类", "数量", "单位", "装车方式", "给司机单价", "金额"]
@@ -299,6 +311,9 @@ def driver_excel(req:HttpRequest):
     for cell in sheet[current_row]:
         cell.alignment = Alignment(horizontal='center', vertical='center')
         cell.font = Font(bold=True)
+    sheet.row_dimensions[1].height = 25
+    for row in range(2, sheet.max_row + 1):
+        sheet.row_dimensions[row].height = 18.5
     local_file_path = "/root/cheliangyunshu/BE-vehicle/test/driver.xlsx"
     workbook.save(local_file_path)
     file_stream = io.BytesIO()
@@ -308,6 +323,137 @@ def driver_excel(req:HttpRequest):
     response = HttpResponse(file_stream, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = 'attachment;filename=driver_excel.xlsx'
     return response
+
+
+@CheckRequire
+def driver_excel_pdf(req: HttpRequest):
+    body = json.loads(req.body.decode("utf-8"))
+    start_date = require(body, "start_date", "string", err_msg="Missing or error type of [start_date]")
+    end_date = require(body, "end_date", "string", err_msg="Missing or error type of [end_date]")
+    vehicle_id = require(body, "vehicle_id", "int", err_msg="Missing or error type of [vehicle_id]")
+
+    vehicle = Vehicle.objects.filter(id=vehicle_id).first()
+    start_date = start_date.split('T')[0]
+    end_date = end_date.split('T')[0]
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "宏途清运司机对账单"
+
+    default_font = Font(size=12)
+    thin_border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+
+    def set_font_and_alignment(cell):
+        cell.font = default_font
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.border = thin_border
+
+    column_widths = {
+        'A': 7, 'B': 15, 'C': 20, 'D': 20, 'E': 10,
+        'F': 8, 'G': 8, 'H': 10.75, 'I': 20, 'J': 8
+    }
+
+    for col_letter, width in column_widths.items():
+        sheet.column_dimensions[col_letter].width = width
+
+    sheet.merge_cells('A1:J1')
+    title_cell = sheet['A1']
+    title_cell.value = "宏途清运司机对账单"
+    title_cell.alignment = Alignment(horizontal='center', vertical='center')
+    title_cell.font = Font(size=16, bold=True)
+    title_cell.border = thin_border
+    sheet['J1'].border = thin_border
+    sheet.merge_cells('A2:B2')
+    sheet.merge_cells('E2:G2')
+    sheet.merge_cells('H2:J2')
+
+    sheet['A2'] = f"车牌号：{vehicle.license}"
+    sheet['C2'] = f"驾驶员：{vehicle.driver}"
+    sheet['D2'] = f"电话：{vehicle.phone}"
+    sheet['E2'] = f"起始日期：{start_date}"
+    sheet['H2'] = f"截止日期：{end_date}"
+
+    for row in sheet['A2:J2']:
+        for cell in row:
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.font = Font(bold=True)
+            cell.border = thin_border
+
+    items = Item.objects.filter(vehicle_id=vehicle_id, if_delete=False)
+    headers = ["序号", "日期", "运输起点", "运输终点", "品类", "数量", "单位", "装车方式", "给司机单价", "金额"]
+    sheet.append(headers)
+    current_row = sheet.max_row
+    for cell in sheet[current_row]:
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+
+    total_amount = 0.0
+    for idx, item in enumerate(items, start=1):
+        start_site = Site.objects.filter(id=item.startsite_id).first()
+        start_site_name = start_site.name if start_site else "无"
+        end_site = Site.objects.filter(id=item.endsite_id).first()
+        end_site_name = end_site.name if end_site else "无"
+        goods = Goods.objects.filter(id=item.goods_id).first()
+        goods_name = goods.name if goods else "无"
+        total_price = item.quantity * item.driverPrice
+        row = [
+            idx,
+            item.date.split('T')[0],
+            start_site_name,
+            end_site_name,
+            goods_name,
+            item.quantity,
+            item.unit,
+            item.get_load_display(),
+            item.driverPrice,
+            total_price
+        ]
+        sheet.append(row)
+        current_row = sheet.max_row
+        for cell in sheet[current_row]:
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.border = thin_border
+        total_amount += total_price
+
+    total_cn = num2cn(total_amount)
+    sheet.append([f"总 计 金 额：{total_amount}", "", "", "", f"总 计 大 写 (金 额)：{total_cn}"])
+    current_row = sheet.max_row
+    sheet.merge_cells(f'A{current_row}:D{current_row}')
+    sheet.merge_cells(f'E{current_row}:J{current_row}')
+    for cell in sheet[current_row]:
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.font = Font(bold=True)
+        cell.border = thin_border
+
+    sheet.row_dimensions[1].height = 25
+    for row in range(2, sheet.max_row + 1):
+        sheet.row_dimensions[row].height = 18.5
+
+    sheet.page_setup.scale = 69
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp_xlsx:
+        workbook.save(tmp_xlsx.name)
+        tmp_xlsx_path = tmp_xlsx.name
+
+    pdf_path = tmp_xlsx_path.replace('.xlsx', '.pdf')
+
+    subprocess.run(['unoconv', '-f', 'pdf', tmp_xlsx_path])
+
+    with open(pdf_path, 'rb') as pdf_file:
+        response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+        response['Content-Disposition'] = 'attachment;filename=transport_statement.pdf'
+
+    os.remove(tmp_xlsx_path)
+    os.remove(pdf_path)
+
+    return response
+
 
 
 
@@ -413,22 +559,22 @@ def change_payment(req:HttpRequest):
     return request_success()
 
 @CheckRequire
-def search4advance(req:HttpRequest,per_page,page):
+def search4payment(req:HttpRequest,per_page,page):
     start_date = req.GET.get('start_date',None)
     end_date = req.GET.get('end_date',None)
-    vehicle_id = req.GET.get('vehicle_id',None)
-    advances = Advance.objects.filter(if_delete=False).order_by("-created_time")
-    if vehicle_id:
-        advances = advances.filter(vehicle_id=vehicle_id)
+    owner = req.GET.get('owner',None)
+    payments = Payment.objects.filter(if_delete=False).order_by("-created_time")
+    if owner:
+        payments = payments.filter(owner=owner)
     if start_date:
-        advances = advances.filter(advance_time__gte=start_date)
+        payments = payments.filter(date=start_date)
     if end_date:
-        advances = advances.filter(advance_time__lte=end_date)
+        payments = payments.filter(date=end_date)
         
-    paginator = Paginator(advances, per_page)
+    paginator = Paginator(payments, per_page)
     current_page = paginator.get_page(page)
     total_pages = paginator.num_pages
-    return_data = [advance.serialize() for advance in current_page]
+    return_data = [payment.serialize() for payment in current_page]
 
-    return request_success({"advances":return_data,"total_pages":total_pages})
+    return request_success({"payments":return_data,"total_pages":total_pages})
 
