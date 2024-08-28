@@ -22,6 +22,7 @@ from openpyxl.styles import Font, Alignment, Border, Side
 import tempfile
 import subprocess
 import os
+import cn2an
 @CheckRequire
 def advance(req:HttpRequest):
     # failure_response, user = get_user_from_request(req,'POST')
@@ -164,47 +165,6 @@ def total_amount(req:HttpRequest):
         total_amount += (item.contractorPrice - item.endPayment - item.driverPrice) * item.quantity + item.startSubsidy + item.endSubsidy
     return request_success({"total_amount":total_amount})
 
-def num2cn(n):
-    # 定义中文数字和单位
-    cn_nums = ["零", "壹", "贰", "叁", "肆", "伍", "陆", "柒", "捌", "玖"]
-    cn_units = ["", "拾", "佰", "仟"]
-    cn_decimal_units = ["角", "分"]  # 一般只取两位小数
-
-    # 将数字按小数点分开
-    if isinstance(n, float):
-        integer_part, decimal_part = str(n).split('.')
-    else:
-        integer_part, decimal_part = str(n), None
-
-    # 处理整数部分
-    int_result = "".join([
-        cn_nums[int(digit)] + (cn_units[(len(integer_part) - i - 1) % 4] if digit != '0' else '')
-        for i, digit in enumerate(integer_part)
-    ])
-
-    # 将整数部分的零零相连去掉，只保留一个零
-    int_result = re.sub('零+', '零', int_result)
-    if int_result.endswith('零'):
-        int_result = int_result[:-1]
-
-    # 处理小数部分
-    if decimal_part:
-        dec_result = ""
-        for i in range(min(len(decimal_part), 2)):  # 一般只处理到分（两位小数）
-            digit = int(decimal_part[i])
-            if digit != 0:
-                dec_result += cn_nums[digit] + cn_decimal_units[i]
-            else:
-                dec_result += cn_nums[digit]
-        dec_result = re.sub('零+', '零', dec_result).rstrip('零')
-    else:
-        dec_result = ""
-
-    # 将整数部分和小数部分组合起来
-    if dec_result:
-        return int_result + '点' + dec_result
-    else:
-        return int_result
 
 
 @CheckRequire
@@ -213,9 +173,12 @@ def driver_excel(req:HttpRequest):
     start_date = require(body, "start_date", "string", err_msg="Missing or error type of [start_date]")
     end_date = require(body, "end_date", "string", err_msg="Missing or error type of [end_date]")
     vehicle_id = require(body, "vehicle_id", "int", err_msg="Missing or error type of [vehicle_id]")
+    item_ids = require(body, "item_ids", "list", err_msg="Missing or error type of [item_ids]")
 
     vehicle = Vehicle.objects.filter(id=vehicle_id).first()
-
+    # 获取所有items
+    items = Item.objects.filter(id__in=item_ids, if_delete=False)
+    
     start_date = start_date.split('T')[0]
     end_date = end_date.split('T')[0]
 
@@ -267,8 +230,8 @@ def driver_excel(req:HttpRequest):
             cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.font = Font(bold=True)
     
-    # 获取所有items
-    items = Item.objects.filter(vehicle_id=vehicle_id, if_delete=False)
+    
+
     headers = ["序号", "日期", "运输起点", "运输终点", "品类", "数量", "单位", "装车方式", "给司机单价", "金额"]
     sheet.append(headers)
     current_row = sheet.max_row
@@ -302,8 +265,9 @@ def driver_excel(req:HttpRequest):
         for cell in sheet[current_row]:
             cell.alignment = Alignment(horizontal='center', vertical='center')
         total_amount += total_price
-
-    total_cn = num2cn(total_amount)
+    if total_amount % 1 == 0:
+        total_amount = int(total_amount)
+    total_cn = cn2an.an2cn(str(total_amount), "rmb")
     sheet.append([f"总 计 金 额：{total_amount}", "", "","",f"总 计 大 写 (金 额)：{total_cn}"])
     current_row = sheet.max_row
     sheet.merge_cells(f'A{current_row}:D{current_row}')
@@ -331,7 +295,8 @@ def driver_excel_pdf(req: HttpRequest):
     start_date = require(body, "start_date", "string", err_msg="Missing or error type of [start_date]")
     end_date = require(body, "end_date", "string", err_msg="Missing or error type of [end_date]")
     vehicle_id = require(body, "vehicle_id", "int", err_msg="Missing or error type of [vehicle_id]")
-
+    item_ids = require(body, "item_ids", "list", err_msg="Missing or error type of [item_ids]")
+    
     vehicle = Vehicle.objects.filter(id=vehicle_id).first()
     start_date = start_date.split('T')[0]
     end_date = end_date.split('T')[0]
@@ -383,8 +348,6 @@ def driver_excel_pdf(req: HttpRequest):
             cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.font = Font(bold=True)
             cell.border = thin_border
-
-    items = Item.objects.filter(vehicle_id=vehicle_id, if_delete=False)
     headers = ["序号", "日期", "运输起点", "运输终点", "品类", "数量", "单位", "装车方式", "给司机单价", "金额"]
     sheet.append(headers)
     current_row = sheet.max_row
@@ -420,8 +383,9 @@ def driver_excel_pdf(req: HttpRequest):
             cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.border = thin_border
         total_amount += total_price
-
-    total_cn = num2cn(total_amount)
+    if total_amount % 1 == 0:
+        total_amount = int(total_amount)
+    total_cn = cn2an.an2cn(str(total_amount), "rmb")
     sheet.append([f"总 计 金 额：{total_amount}", "", "", "", f"总 计 大 写 (金 额)：{total_cn}"])
     current_row = sheet.max_row
     sheet.merge_cells(f'A{current_row}:D{current_row}')
@@ -466,7 +430,7 @@ def payment(req:HttpRequest):
     owner = require(body,"owner","string",err_msg="Missing or error type of [owner]")
     date = require(body,"date","string",err_msg="Missing or error type of [date]")
     amount = require(body,"amount","float",err_msg="Missing or error type of [amount]")
-    pay_id = require(body,"pay_id","int",err_msg="Missing or error type of [vehicpay_idle_id]")
+    pay_id = require(body,"pay_id","int",err_msg="Missing or error type of [pay_id]")
     balance_amount = require(body,"balance_amount","float",err_msg="Missing or error type of [balance_amount]")
     try:
         note = require(body,"note","string",err_msg="Missing or error type of [note]")
@@ -567,9 +531,9 @@ def search4payment(req:HttpRequest,per_page,page):
     if owner:
         payments = payments.filter(owner=owner)
     if start_date:
-        payments = payments.filter(date=start_date)
+        payments = payments.filter(date__gte=start_date)
     if end_date:
-        payments = payments.filter(date=end_date)
+        payments = payments.filter(date__lte=end_date)
         
     paginator = Paginator(payments, per_page)
     current_page = paginator.get_page(page)

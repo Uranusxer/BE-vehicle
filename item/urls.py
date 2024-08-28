@@ -12,5 +12,6 @@ urlpatterns = [
     path('start_excel_pdf', views.start_excel_pdf, name='start_excel_pdf'),
     path('end_excel',views.end_excel,name='end_excel'),
     path('end_excel_pdf', views.end_excel_pdf, name='end_excel_pdf'),
+    path('detail_excel', views.detail_excel, name='detail_excel'),
     # path('item2excel',views.item2excel,name='item2excel')
 ]

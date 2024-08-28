@@ -27,6 +27,7 @@ import os
 import subprocess
 import fitz
 from openpyxl.worksheet.page import PageMargins, PrintPageSetup
+import cn2an
 
 def convert_utc_to_china_time(utc_time_str):
     # 将字符串转换为 datetime 对象
@@ -42,48 +43,6 @@ def convert_utc_to_china_time(utc_time_str):
     china_date_str = china_time.strftime('%Y-%m-%d')
     
     return china_date_str
-
-def num2cn(n):
-    # 定义中文数字和单位
-    cn_nums = ["零", "壹", "贰", "叁", "肆", "伍", "陆", "柒", "捌", "玖"]
-    cn_units = ["", "拾", "佰", "仟"]
-    cn_decimal_units = ["角", "分"]  # 一般只取两位小数
-
-    # 将数字按小数点分开
-    if isinstance(n, float):
-        integer_part, decimal_part = str(n).split('.')
-    else:
-        integer_part, decimal_part = str(n), None
-
-    # 处理整数部分
-    int_result = "".join([
-        cn_nums[int(digit)] + (cn_units[(len(integer_part) - i - 1) % 4] if digit != '0' else '')
-        for i, digit in enumerate(integer_part)
-    ])
-
-    # 将整数部分的零零相连去掉，只保留一个零
-    int_result = re.sub('零+', '零', int_result)
-    if int_result.endswith('零'):
-        int_result = int_result[:-1]
-
-    # 处理小数部分
-    if decimal_part:
-        dec_result = ""
-        for i in range(min(len(decimal_part), 2)):  # 一般只处理到分（两位小数）
-            digit = int(decimal_part[i])
-            if digit != 0:
-                dec_result += cn_nums[digit] + cn_decimal_units[i]
-            else:
-                dec_result += cn_nums[digit]
-        dec_result = re.sub('零+', '零', dec_result).rstrip('零')
-    else:
-        dec_result = ""
-
-    # 将整数部分和小数部分组合起来
-    if dec_result:
-        return int_result + '点' + dec_result
-    else:
-        return int_result
 
 @CheckRequire
 def transport_item(req:HttpRequest):
@@ -542,8 +501,9 @@ def start_excel(req: HttpRequest):
     # sheet.merge_cells(f'G{current_row}:H{current_row}')
     # for cell in sheet[current_row]:
     #     cell.alignment = Alignment(h  orizontal='center')
-
-    total_cn = num2cn(total_amount)
+    if total_amount % 1 == 0:
+        total_amount = int(total_amount)
+    total_cn = cn2an.an2cn(str(total_amount), "rmb")
     sheet.append(["总 计 金 额", "", "", total_amount, "", "总 计 大 写 (金 额)",total_cn])
     current_row = sheet.max_row
     sheet.merge_cells(f'A{current_row}:C{current_row}')
@@ -554,12 +514,11 @@ def start_excel(req: HttpRequest):
     
     
     # 运输品类合计
-    headers = ["","","序号", "运输起点", "品类", "车队", "合计数量","","总金额","","","起点补贴金额"]
+    headers = ["","","序号", "运输起点", "品类", "车队", "合计数量","","单位","工地承接单价","总金额","起点补贴金额"]
     sheet.append(headers)
 
     current_row = sheet.max_row
     sheet.merge_cells(f'G{current_row}:H{current_row}')
-    sheet.merge_cells(f'I{current_row}:K{current_row}')
 
     for cell in sheet[current_row]:
         cell.font = Font(bold=True)
@@ -573,6 +532,7 @@ def start_excel(req: HttpRequest):
         'quantity',
         'contractorPrice',
         'vehicle_id',
+        'unit',
     )
 
     # 准备聚合结果的字典
@@ -585,7 +545,7 @@ def start_excel(req: HttpRequest):
 
     # 循环处理每个初步查询的结果
     for item in initial_query:
-        key = (item['startsite_id'], item['goods_id'])
+        key = (item['startsite_id'], item['goods_id'], item['contractorPrice'], item['unit'])
         transport_summary_dict[key]['start_subsidy_sum'] += item['startSubsidy']
         transport_summary_dict[key]['cost_sum'] += item['quantity'] * item['contractorPrice']
         transport_summary_dict[key]['quantity_sum'] += item['quantity']
@@ -593,7 +553,7 @@ def start_excel(req: HttpRequest):
 
     # 将聚合结果转换为列表
     transport_summary = []
-    for (startsite_id, goods_id), data in transport_summary_dict.items():
+    for (startsite_id, goods_id, contractorPrice, unit), data in transport_summary_dict.items():
         transport_summary.append({
             'startsite_id': startsite_id,
             'goods_id': goods_id,
@@ -601,30 +561,11 @@ def start_excel(req: HttpRequest):
             'quantity_sum': data['quantity_sum'],
             'cost_sum': data['cost_sum'],
             'vehicle_ids': data['vehicle_ids'],
+            "contractorPrice": contractorPrice,
+            "unit": unit
         })
 
-    # # Step 2: 使用Python逻辑合并vehicle_ids
-    # # 创建一个默认字典保存聚合后结果
-    # summary_dict = defaultdict(lambda: {'start_subsidy_sum': 0, 'cost_sum': 0, 'vehicle_ids': []})
 
-    # # 迭代原始对象，构建分组键和合并vehicle_ids
-    # for item in items:
-    #     key = (item.startsite_id, item.goods_id)
-    #     summary_dict[key]['start_subsidy_sum'] += item.startSubsidy
-    #     summary_dict[key]['cost_sum'] += item.quantity * item.contractorPrice
-    #     if item.vehicle_ids:
-    #         summary_dict[key]['vehicle_ids'].extend(item.vehicle_ids)
-
-    # # 转换结果为列表形式
-    # result = []
-    # for key, values in summary_dict.items():
-    #     result.append({
-    #         'startsite_id': key[0],
-    #         'goods_id': key[1],
-    #         'start_subsidy_sum': values['start_subsidy_sum'],
-    #         'cost_sum': values['cost_sum'],
-    #         'vehicle_ids': values['vehicle_ids'],
-    #     })
     row1 = sheet.max_row
     total_sum1 = 0.0
     total_sum2 = 0.0
@@ -648,22 +589,19 @@ def start_excel(req: HttpRequest):
             vehicle_names,
             item['quantity_sum'],
             "",
+            item['unit'],
+            item['contractorPrice'],
             item['cost_sum'],
-            "",
-            "",
             item['start_subsidy_sum']
         ]
         sheet.append(row)
         current_row = sheet.max_row
         sheet.merge_cells(f'G{current_row}:H{current_row}')
-        sheet.merge_cells(f'I{current_row}:K{current_row}')
         
         for cell in sheet[current_row]:
             cell.alignment = Alignment(horizontal='center', vertical='center')
 
-    # TODO: calculate total_sum1 and total_sum2
-    # total_sum1 equal to sum of item['cost_sum']
-    # total_sum2 equal to sum of item['start_subsidy_sum']
+
     sheet.append(["","","合计","-","-","-",total_sum1,"","","","",total_sum2])
     
     current_row = sheet.max_row
@@ -858,8 +796,9 @@ def start_excel_pdf(req: HttpRequest):
             cell.border = border
 
         total_amount += total_price
-
-    total_cn = num2cn(total_amount)
+    if total_amount % 1 == 0:
+        total_amount = int(total_amount)
+    total_cn = cn2an.an2cn(str(total_amount), "rmb")
     sheet.append(["总 计 金 额", "", "", total_amount, "", "总 计 大 写 (金 额)", total_cn])
     current_row = sheet.max_row
     sheet.merge_cells(f'A{current_row}:C{current_row}')
@@ -869,18 +808,19 @@ def start_excel_pdf(req: HttpRequest):
         cell.alignment = Alignment(horizontal='center', vertical='center')
         cell.border = border
 
-    headers = ["", "", "序号", "运输起点", "品类", "车队", "合计数量", "", "总金额", "", "", "起点补贴金额"]
+   # 运输品类合计
+    headers = ["","","序号", "运输起点", "品类", "车队", "合计数量","","单位","工地承接单价","总金额","起点补贴金额"]
     sheet.append(headers)
 
     current_row = sheet.max_row
     sheet.merge_cells(f'G{current_row}:H{current_row}')
-    sheet.merge_cells(f'I{current_row}:K{current_row}')
 
     for cell in sheet[current_row]:
         cell.font = Font(bold=True)
         cell.alignment = Alignment(horizontal='center', vertical='center')
         cell.border = border
 
+    # 初步查询，获取所需的基本信息
     initial_query = items.values(
         'startsite_id',
         'goods_id',
@@ -888,8 +828,10 @@ def start_excel_pdf(req: HttpRequest):
         'quantity',
         'contractorPrice',
         'vehicle_id',
+        'unit',
     )
 
+    # 准备聚合结果的字典
     transport_summary_dict = defaultdict(lambda: {
         'start_subsidy_sum': 0,
         'cost_sum': 0,
@@ -897,15 +839,17 @@ def start_excel_pdf(req: HttpRequest):
         'vehicle_ids': []
     })
 
+    # 循环处理每个初步查询的结果
     for item in initial_query:
-        key = (item['startsite_id'], item['goods_id'])
+        key = (item['startsite_id'], item['goods_id'], item['contractorPrice'], item['unit'])
         transport_summary_dict[key]['start_subsidy_sum'] += item['startSubsidy']
         transport_summary_dict[key]['cost_sum'] += item['quantity'] * item['contractorPrice']
         transport_summary_dict[key]['quantity_sum'] += item['quantity']
         transport_summary_dict[key]['vehicle_ids'].append(item['vehicle_id'])
 
+    # 将聚合结果转换为列表
     transport_summary = []
-    for (startsite_id, goods_id), data in transport_summary_dict.items():
+    for (startsite_id, goods_id, contractorPrice, unit), data in transport_summary_dict.items():
         transport_summary.append({
             'startsite_id': startsite_id,
             'goods_id': goods_id,
@@ -913,7 +857,10 @@ def start_excel_pdf(req: HttpRequest):
             'quantity_sum': data['quantity_sum'],
             'cost_sum': data['cost_sum'],
             'vehicle_ids': data['vehicle_ids'],
+            "contractorPrice": contractorPrice,
+            "unit": unit
         })
+
 
     row1 = sheet.max_row
     total_sum1 = 0.0
@@ -923,9 +870,10 @@ def start_excel_pdf(req: HttpRequest):
         start_site_name = start_site.name if start_site else "无"
         goods = Goods.objects.filter(id=item['goods_id']).first()
         goods_name = goods.name if goods else "无"
-        vehicle_ids = item['vehicle_ids'][:3]  # 取前3个vehicle_ids
+        vehicle_ids = item['vehicle_ids'][:3]  # Extract up to the first three vehicle IDs
         vehicles = Vehicle.objects.filter(id__in=vehicle_ids)
-        vehicle_names = '，'.join([vehicle.license for vehicle in vehicles])
+        vehicle_names ='，'.join([vehicle.license for vehicle in vehicles])
+        # Accumulate sums
         total_sum1 += item['cost_sum']
         total_sum2 += item['start_subsidy_sum']
         row = [
@@ -937,26 +885,29 @@ def start_excel_pdf(req: HttpRequest):
             vehicle_names,
             item['quantity_sum'],
             "",
+            item['unit'],
+            item['contractorPrice'],
             item['cost_sum'],
-            "",
-            "",
             item['start_subsidy_sum']
         ]
         sheet.append(row)
         current_row = sheet.max_row
         sheet.merge_cells(f'G{current_row}:H{current_row}')
-        sheet.merge_cells(f'I{current_row}:K{current_row}')
-
+        
         for cell in sheet[current_row]:
             cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.border = border
 
-    sheet.append(["", "", "合计", "-", "-", "-", total_sum1, "", "", "", "", total_sum2])
+    sheet.append(["","","合计","-","-","-",total_sum1,"","","","",total_sum2])
+    
     current_row = sheet.max_row
     sheet.merge_cells(f'G{current_row}:K{current_row}')
     for cell in sheet[current_row]:
-        cell.alignment = Alignment(horizontal='center', vertical='center')
-        cell.border = border
+        cell.alignment = Alignment(horizontal='center')
+        for cell in sheet[current_row]:
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.border = border
+
 
     row2 = sheet.max_row
     sheet.merge_cells(start_row=row1, start_column=1, end_row=row2, end_column=2)
@@ -1095,26 +1046,22 @@ def end_excel(req: HttpRequest):
     sheet.merge_cells('G4:K4')
 
     
-    sheet['A2'] = "项 目 名 称"
-    sheet['D2'] = project.name if project else None
-    sheet['F2'] = "项 目 老 板 名 称"
-    sheet['G2'] = project.owner if project else None
-    sheet['A3'] = "对 账 起 始 日 期"
-    sheet['D3'] = start_date
-    sheet['F3'] = "对 账 截 止 日 期"
-    sheet['G3'] = end_date
-    sheet['A4'] = "运 输 单 位 名 称"
-    sheet['D4'] = "南平市宏途渣土清运有限公司"
-    sheet['F4'] = "公 司 负 责 人"
-    sheet['G4'] = "吴 春 才 18905996295"
+    sheet['A2'] = "对 账 起 始 日 期"
+    sheet['D2'] = start_date
+    sheet['F2'] = "对 账 截 止 日 期"
+    sheet['G2'] = end_date
+    sheet['A3'] = "运 输 单 位 名 称"
+    sheet['D3'] = "南平市宏途渣土清运有限公司"
+    sheet['F3'] = "公 司 负 责 人"
+    sheet['G3'] = "吴 春 才 18905996295"
     
-    for row in sheet['A2:K4']:
+    for row in sheet['A2:K3']:
         for cell in row:
             cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.font = Font(bold=True)
     
     # 列标题
-    headers = ["序号", "日期", "", "运输起点", "品类", "车队", "装车方式", "数量", "单位", "终点付费金额", "总金额"]
+    headers = ["序号", "日期", "", "运输终点", "品类", "车队", "装车方式", "数量", "单位", "终点付费金额", "总金额"]
     sheet.append(headers)
     
     current_row = sheet.max_row
@@ -1166,8 +1113,9 @@ def end_excel(req: HttpRequest):
     # sheet.merge_cells(f'G{current_row}:H{current_row}')
     # for cell in sheet[current_row]:
     #     cell.alignment = Alignment(h  orizontal='center')
-
-    total_cn = num2cn(total_amount)
+    if total_amount % 1 == 0:
+        total_amount = int(total_amount)
+    total_cn = cn2an.an2cn(str(total_amount), "rmb")
     sheet.append(["总 计 金 额", "", "", total_amount, "", "总 计 大 写 (金 额)",total_cn])
     current_row = sheet.max_row
     sheet.merge_cells(f'A{current_row}:C{current_row}')
@@ -1178,12 +1126,11 @@ def end_excel(req: HttpRequest):
     
     
     # 运输品类合计
-    headers = ["","","序号", "运输起点", "品类", "车队", "合计数量","","总金额","",""]
+    headers = ["","","序号", "运输终点", "品类", "车队", "合计数量","","单位","终点付费金额","总金额"]
     sheet.append(headers)
 
     current_row = sheet.max_row
     sheet.merge_cells(f'G{current_row}:H{current_row}')
-    sheet.merge_cells(f'I{current_row}:K{current_row}')
 
     for cell in sheet[current_row]:
         cell.font = Font(bold=True)
@@ -1196,6 +1143,7 @@ def end_excel(req: HttpRequest):
         'endPayment',
         'quantity',
         'vehicle_id',
+        "unit"
     )
 
     # 准备聚合结果的字典
@@ -1208,7 +1156,7 @@ def end_excel(req: HttpRequest):
 
     # 循环处理每个初步查询的结果
     for item in initial_query:
-        key = (item['endsite_id'], item['goods_id'])
+        key = (item['endsite_id'], item['goods_id'], item['endPayment'], item['unit'])
         transport_summary_dict[key]['endPayment_sum'] += item['endPayment']
         transport_summary_dict[key]['cost_sum'] += item['quantity'] * item['endPayment']
         transport_summary_dict[key]['quantity_sum'] += item['quantity']
@@ -1216,7 +1164,7 @@ def end_excel(req: HttpRequest):
 
     # 将聚合结果转换为列表
     transport_summary = []
-    for (endsite_id, goods_id), data in transport_summary_dict.items():
+    for (endsite_id, goods_id, endPayment, unit), data in transport_summary_dict.items():
         transport_summary.append({
             'endsite_id': endsite_id,
             'goods_id': goods_id,
@@ -1224,29 +1172,11 @@ def end_excel(req: HttpRequest):
             'quantity_sum': data['quantity_sum'],
             'cost_sum': data['cost_sum'],
             'vehicle_ids': data['vehicle_ids'],
+            'endPayment': endPayment,
+            'unit': unit
         })
 
-    # # Step 2: 使用Python逻辑合并vehicle_ids
-    # # 创建一个默认字典保存聚合后结果
-    # summary_dict = defaultdict(lambda: {'endPayment_sum': 0, 'cost_sum': 0, 'vehicle_ids': []})
 
-    # # 迭代原始对象，构建分组键和合并vehicle_ids
-    # for item in items:
-    #     key = (item.endsite_id, item.goods_id)
-    #     summary_dict[key]['endPayment_sum'] += item.startSubsidy
-    #     summary_dict[key]['cost_sum'] += item.quantity * item.endPayment
-    #     if item.vehicle_ids:
-    #         summary_dict[key]['vehicle_ids'].extend(item.vehicle_ids)
-
-    # # 转换结果为列表形式
-    # result = []
-    # for key, values in summary_dict.items():
-    #     result.append({
-    #         'endsite_id': key[0],
-    #         'goods_id': key[1],
-    #         'cost_sum': values['cost_sum'],
-    #         'vehicle_ids': values['vehicle_ids'],
-    #     })
     row1 = sheet.max_row    
     total_sum1 = 0.0
     total_sum2 = 0.0
@@ -1269,20 +1199,16 @@ def end_excel(req: HttpRequest):
             vehicle_names,
             item['quantity_sum'],
             "",
+            item['unit'],
+            item['endPayment'],
             item['cost_sum'],
-            "",
-            ""
         ]
         sheet.append(row)
         current_row = sheet.max_row
         sheet.merge_cells(f'G{current_row}:H{current_row}')
-        sheet.merge_cells(f'I{current_row}:K{current_row}')
         for cell in sheet[current_row]:
             cell.alignment = Alignment(horizontal='center', vertical='center')
 
-    # TODO: calculate total_sum1 and total_sum2
-    # total_sum1 equal to sum of item['cost_sum']
-    # total_sum2 equal to sum of item['start_subsidy_sum']
     sheet.append(["","","合计","-","-","-",total_sum1,"","","",""])
     
     current_row = sheet.max_row
@@ -1423,7 +1349,7 @@ def end_excel_pdf(req: HttpRequest):
             cell.font = Font(bold=True)
             cell.border = thin_border
 
-    headers = ["序号", "日期", "", "运输起点", "品类", "车队", "装车方式", "数量", "单位", "终点付费金额", "总金额"]
+    headers = ["序号", "日期", "", "运输终点", "品类", "车队", "装车方式", "数量", "单位", "终点付费金额", "总金额"]
     sheet.append(headers)
 
     current_row = sheet.max_row
@@ -1466,8 +1392,9 @@ def end_excel_pdf(req: HttpRequest):
             cell.border = thin_border
 
         total_amount += total_price
-
-    total_cn = num2cn(total_amount)
+    if total_amount % 1 == 0:
+        total_amount = int(total_amount)
+    total_cn = cn2an.an2cn(str(total_amount), "rmb")
     sheet.append(["总 计 金 额", "", "", total_amount, "", "总 计 大 写 (金 额)",total_cn])
     current_row = sheet.max_row
     sheet.merge_cells(f'A{current_row}:C{current_row}')
@@ -1477,24 +1404,29 @@ def end_excel_pdf(req: HttpRequest):
         cell.alignment = Alignment(horizontal='center', vertical='center')
         cell.border = thin_border
 
-    headers = ["","","序号", "运输起点", "品类", "车队", "合计数量","","总金额","",""]
+    # 运输品类合计
+    headers = ["","","序号", "运输终点", "品类", "车队", "合计数量","","单位","终点付费金额","总金额"]
     sheet.append(headers)
+
     current_row = sheet.max_row
     sheet.merge_cells(f'G{current_row}:H{current_row}')
-    sheet.merge_cells(f'I{current_row}:K{current_row}')
+
     for cell in sheet[current_row]:
         cell.font = Font(bold=True)
-        cell.alignment = Alignment(horizontal='center')
+        cell.alignment = Alignment(horizontal='center', vertical='center')
         cell.border = thin_border
 
+    # 初步查询，获取所需的基本信息
     initial_query = items.values(
         'endsite_id',
         'goods_id',
         'endPayment',
         'quantity',
-        'vehicle_id'
+        'vehicle_id',
+        "unit"
     )
 
+    # 准备聚合结果的字典
     transport_summary_dict = defaultdict(lambda: {
         'endPayment_sum': 0,
         'cost_sum': 0,
@@ -1502,15 +1434,17 @@ def end_excel_pdf(req: HttpRequest):
         'vehicle_ids': []
     })
 
+    # 循环处理每个初步查询的结果
     for item in initial_query:
-        key = (item['endsite_id'], item['goods_id'])
+        key = (item['endsite_id'], item['goods_id'], item['endPayment'], item['unit'])
         transport_summary_dict[key]['endPayment_sum'] += item['endPayment']
         transport_summary_dict[key]['cost_sum'] += item['quantity'] * item['endPayment']
         transport_summary_dict[key]['quantity_sum'] += item['quantity']
         transport_summary_dict[key]['vehicle_ids'].append(item['vehicle_id'])
 
+    # 将聚合结果转换为列表
     transport_summary = []
-    for (endsite_id, goods_id), data in transport_summary_dict.items():
+    for (endsite_id, goods_id, endPayment, unit), data in transport_summary_dict.items():
         transport_summary.append({
             'endsite_id': endsite_id,
             'goods_id': goods_id,
@@ -1518,7 +1452,10 @@ def end_excel_pdf(req: HttpRequest):
             'quantity_sum': data['quantity_sum'],
             'cost_sum': data['cost_sum'],
             'vehicle_ids': data['vehicle_ids'],
+            'endPayment': endPayment,
+            'unit': unit
         })
+
 
     row1 = sheet.max_row    
     total_sum1 = 0.0
@@ -1528,10 +1465,10 @@ def end_excel_pdf(req: HttpRequest):
         end_site_name = end_site.name if end_site else "无"
         goods = Goods.objects.filter(id=item['goods_id']).first()
         goods_name = goods.name if goods else "无"
-        vehicle_ids = item['vehicle_ids'][:3]
+        vehicle_ids = item['vehicle_ids'][:3]  # Extract up to the first three vehicle IDs
         vehicles = Vehicle.objects.filter(id__in=vehicle_ids)
-        vehicle_names = '，'.join(vehicle.license for vehicle in vehicles)
-
+        vehicle_names ='，'.join([vehicle.license for vehicle in vehicles])
+        # Accumulate sums
         total_sum1 += item['cost_sum']
         row = [
             "",
@@ -1542,17 +1479,17 @@ def end_excel_pdf(req: HttpRequest):
             vehicle_names,
             item['quantity_sum'],
             "",
+            item['unit'],
+            item['endPayment'],
             item['cost_sum'],
-            "",
-            ""
         ]
         sheet.append(row)
         current_row = sheet.max_row
         sheet.merge_cells(f'G{current_row}:H{current_row}')
-        sheet.merge_cells(f'I{current_row}:K{current_row}')
         for cell in sheet[current_row]:
             cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.border = thin_border
+
 
     sheet.append(["","","合计","-","-","-",total_sum1,"","","",""])
     current_row = sheet.max_row
@@ -1621,4 +1558,110 @@ def end_excel_pdf(req: HttpRequest):
     os.remove(tmp_xlsx_path)
     os.remove(pdf_path)
 
+    return response
+
+
+def detail_excel(req:HttpRequest):
+    body = json.loads(req.body.decode("utf-8"))
+    item_ids = require(body, "item_ids", "list", err_msg="Missing or error type of [item_ids]")
+    # 创建Excel工作簿
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "宏途清运明细表"
+    default_font = Font(size=10)
+    def set_font_and_alignment(cell):
+        cell.font = default_font
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+    # 设置列宽
+    column_widths = {
+        'A': 8.05,    # 序号
+        'B': 13.72,   # 日期
+        'C': 11.05,   # 项目
+        'D': 9.38,   # 老板
+        'E': 11.72,   # 起点工地
+        'F': 11.72,   # 终点工地
+        'G': 13.72,   # 车牌
+        'H': 9.38,   # 司机
+        'I': 11.72,   # 装车方式
+        'J': 8.05,   # 品类
+        'K': 8.05,   # 单位
+        'L': 8.05,   # 数量
+        'M': 15.38,   # 工地承接单价
+        'N': 15.38,   # 起点补贴金额
+        'O': 15.38,   # 弃点付费金额
+        'P': 15.38,   # 终点付费金额
+        'Q': 13.55,   # 给司机单价
+        'R': 20.05,   # 备注
+    }
+
+    for col_letter, width in column_widths.items():
+        sheet.column_dimensions[col_letter].width = width
+
+    # 添加表头
+    sheet.merge_cells('A1:R1')
+    title_cell = sheet['A1']
+    title_cell.value = "宏途清运明细表"
+    title_cell.alignment = Alignment(horizontal='center', vertical='center')
+    title_cell.font = Font(size=16, bold=True)
+    current_row = sheet.max_row
+    sheet.row_dimensions[current_row].height = 28.5
+    # 列标题
+    headers = ["序号", "日期", "项目", "老板","运输起点", "运输终点", "车牌","司机", "装车方式","品类","单位","数量",  "工地承接单价", "起点补贴金额", "弃点付费金额","终点付费金额","给司机单价","备注"]
+    sheet.append(headers)
+    
+    current_row = sheet.max_row    
+    for cell in sheet[current_row]:
+        cell.font = Font(bold=True, size=10)
+        cell.alignment = Alignment(horizontal='center')
+    sheet.row_dimensions[current_row].height = 22.5
+    # 获取过滤的Item
+    items = Item.objects.filter(id__in=item_ids, if_delete=False)
+    
+    for idx, item in enumerate(items, start=1):
+        # get necessary info
+        project = Project.objects.filter(id=item.project_id).first()
+        project_name = project.name if project else "无"
+        project_owner = project.owner if project else "无"
+        start_site = Site.objects.filter(id=item.startsite_id).first()
+        end_site = Site.objects.filter(id=item.endsite_id).first()
+        start_site_name = start_site.name if start_site else "无"
+        end_site_name = end_site.name if end_site else "无"
+        goods = Goods.objects.filter(id=item.goods_id).first()
+        goods_name = goods.name if goods else "无"
+        vehicle = Vehicle.objects.filter(id=item.vehicle_id).first()
+        driver = vehicle.driver if vehicle else "无"
+        license = vehicle.license if vehicle else "无"
+        row = [
+            idx,
+            convert_utc_to_china_time(item.date).split('T')[0],
+            project_name,
+            project_owner,
+            start_site_name,
+            end_site_name,
+            license,
+            driver,
+            item.get_load_display(),
+            goods_name,
+            item.unit,
+            item.quantity,
+            item.contractorPrice,
+            item.startSubsidy,
+            item.endSubsidy,
+            item.endPayment,
+            item.driverPrice,
+            item.note
+            ]
+        # 将数据追加到sheet中，并合并相应的单元格
+        sheet.append(row)
+        current_row = sheet.max_row
+        for cell in sheet[current_row]:
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.font = Font(size=10)
+        sheet.row_dimensions[current_row].height = 22.5  # 设置数据行高
+    file_stream = io.BytesIO()
+    workbook.save(file_stream)
+    file_stream.seek(0)
+    
+    response = HttpResponse(file_stream, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment;filename=transport_statement.xlsx'
     return response
