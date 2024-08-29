@@ -13,7 +13,7 @@ from utils.constants import OFFLINE
 # Create your views here.
 # 登录时，后端向前端返回用户基本信息
 @CheckRequire
-def login(req: HttpRequest):
+def login_password(req: HttpRequest):
     if req.method != "POST":
         return BAD_METHOD
     body = json.loads(req.body.decode("utf-8"))
@@ -61,9 +61,9 @@ def signup(req:HttpRequest): # 注册
 
 @CheckRequire
 def logout(req: HttpRequest):
-    # failure_response, user = get_user_from_request(req,'POST')
-    # if failure_response:
-    #     return failure_response
+    failure_response, user = get_user_from_request(req,'POST')
+    if failure_response:
+        return failure_response
     user.status = OFFLINE
     return request_success()    
 
@@ -89,6 +89,18 @@ def change_password(req:HttpRequest):
         user.save()
         return request_success()
     return request_failed(code=2,info="Wrong password",status_code=401)
+
+
+@CheckRequire
+def change_username(req:HttpRequest):
+    failure_response, user = get_user_from_request(req,'POST')
+    if failure_response:
+        return failure_response
+    body = json.loads(req.body.decode("utf-8"))
+    newUsername = require(body, "newUsername", "string", err_msg="Missing or error type of [newUsername]")
+    user.name = newUsername
+    user.save()
+    return request_success()
 
 @CheckRequire
 def info(req:HttpRequest):

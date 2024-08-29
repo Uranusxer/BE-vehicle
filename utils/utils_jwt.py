@@ -9,8 +9,8 @@ from django.apps import apps
 
 # c.f. https://thuse-course.github.io/course-index/basic/jwt/#jwt
 # !Important! Change this to your own salt, better randomly generated!"
-SALT = ("KawaiiNana" + datetime.datetime.now().strftime("%Y%m%d%H%M")).encode("utf-8")
-EXPIRE_IN_SECONDS = 60 * 60  * 24 * 1  # 1 day
+SALT = ("KawaiiNanab1f3f9buvb9103gfefkuwf9112g1wg1u").encode("utf-8")
+EXPIRE_IN_SECONDS = 60 * 60  * 24 * 2  # 2 day
 REFRESH_EXPIRE_IN_SECONDS = 60 * 60 * 24 * 7  # 7 days for refresh token
 
 ALT_CHARS = "-_".encode("utf-8")
@@ -76,7 +76,7 @@ def check_jwt_token(token: str) -> Optional[dict]:
     
     if signature_b64_check != signature_b64:
         return None
-    
+        # return None
     # Check expire
     payload = json.loads(payload_str)
     if payload["exp"] < time.time():

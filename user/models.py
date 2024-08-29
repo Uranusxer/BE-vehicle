@@ -54,7 +54,7 @@ def get_user_from_request(req: HttpRequest,type:str,type2:str=None):
     if not userID:
         return request_failed(code=-2,info="userID not contained in the jwt_token",status_code=400), None
     # Fetch the user from the database using user_id
-    user = User.objects.filter(name=userID).first()
+    user = User.objects.filter(id=userID).first()
     if not user:    
         return request_failed(code=1,info="User does not exist",status_code=404), None
     return None, user
