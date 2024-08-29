@@ -16,6 +16,7 @@ class User(models.Model):
     login_time = models.FloatField(default=utils_time.get_timestamp())
     phone = models.BigIntegerField(default=0,null=True)
     status = models.CharField(max_length=20, choices=USER_STATUS, default=OFFLINE)
+    manager = models.BooleanField(default=False)
 
     def save(self, *args, **kwargs):
         if not self.password.startswith('pbkdf2_sha256$'):

@@ -46,9 +46,9 @@ def convert_utc_to_china_time(utc_time_str):
 
 @CheckRequire
 def transport_item(req:HttpRequest):
-    # failure_response, user = get_user_from_request(req,'POST')
-    # if failure_response:
-    #     return failure_response
+    failure_response, user = get_user_from_request(req,'POST')
+    if failure_response:
+        return failure_response
     body = json.loads(req.body.decode("utf-8"))
 
     # all kinds of ids
@@ -97,9 +97,9 @@ def transport_item(req:HttpRequest):
 
 @CheckRequire
 def del_item(req:HttpRequest,item_id):
-    # failure_response, user = get_user_from_request(req,'DELETE')
-    # if failure_response:
-    #     return failure_response
+    failure_response, user = get_user_from_request(req,'DELETE')
+    if failure_response:
+        return failure_response
     item = Item.objects.filter(id=item_id,if_delete=False).first()
     if not item:
         request_failed(code=1,info="Item does not exist",status_code=404)
@@ -109,9 +109,9 @@ def del_item(req:HttpRequest,item_id):
 
 @CheckRequire
 def change_item(req:HttpRequest):
-    # failure_response, user = get_user_from_request(req,'POST')
-    # if failure_response:
-    #     return failure_response
+    failure_response, user = get_user_from_request(req,'POST')
+    if failure_response:
+        return failure_response
 
     body = json.loads(req.body.decode("utf-8"))
     item_id = require(body,"item_id","int",err_msg="Missing or error type of [item_id]")
@@ -220,9 +220,9 @@ def change_item(req:HttpRequest):
 
 @CheckRequire
 def search4item(req:HttpRequest,per_page,page):
-    # failure_response, user = get_user_from_request(req,'GET')
-    # if failure_response:
-    #     return failure_response
+    failure_response, user = get_user_from_request(req,'GET')
+    if failure_response:
+        return failure_response
     project_owner = req.GET.get('ownerName', None)
     startsite_id = req.GET.get('startsite_id',None)
     endsite_id = req.GET.get('endsite_id',None)
@@ -265,9 +265,9 @@ def search4item(req:HttpRequest,per_page,page):
 
 @CheckRequire
 def item_list(req:HttpRequest,per_page,page):
-    # failure_response, user = get_user_from_request(req,'GET')
-    # if failure_response:
-    #     return failure_response
+    failure_response, user = get_user_from_request(req,'GET')
+    if failure_response:
+        return failure_response
     item_list = Item.objects.filter(if_delete=False).order_by("-created_time")
     paginator = Paginator(item_list,per_page)
     item_page = paginator.get_page(page)
@@ -279,9 +279,9 @@ def item_list(req:HttpRequest,per_page,page):
 
 @CheckRequire
 def item_price(req: HttpRequest):
-    # failure_response, user = get_user_from_request(req,'POST')
-    # if failure_response:
-    #     return failure_response
+    failure_response, user = get_user_from_request(req,'POST')
+    if failure_response:
+        return failure_response
     body = json.loads(req.body.decode("utf-8"))
 
     items = body.get('items', [])
@@ -326,17 +326,17 @@ def item_price(req: HttpRequest):
             if not item:
                 response_data["errors"].append({"item_id": item_id, "error": "Item does not exist"})
                 continue
-            if contractorPrice:
+            if contractorPrice or contractorPrice == 0:
                 item.contractorPrice = contractorPrice
-            if startSubsidy:
+            if startSubsidy or startSubsidy == 0:
                 item.startSubsidy = startSubsidy
-            if endSubsidy:
+            if endSubsidy or endSubsidy == 0:
                 item.endSubsidy = endSubsidy
-            if endPayment:
+            if endPayment or endPayment == 0:
                 item.endPayment = endPayment
-            if driverPrice:
+            if driverPrice or driverPrice == 0:
                 item.driverPrice = driverPrice
-            if quantity:
+            if quantity or quantity == 0:
                 item.quantity = quantity
             if unit:
                 item.unit = unit
@@ -360,6 +360,9 @@ def item_price(req: HttpRequest):
 
 @CheckRequire
 def start_excel(req: HttpRequest):
+    failure_response, user = get_user_from_request(req,'POST')
+    if failure_response:
+        return failure_response
     # 从请求参数中获取数据
     body = json.loads(req.body.decode("utf-8"))
     item_ids = require(body, "item_ids", "list", err_msg="Missing or error type of [item_ids]")
@@ -661,6 +664,9 @@ def start_excel(req: HttpRequest):
 
 @CheckRequire
 def start_excel_pdf(req: HttpRequest):
+    failure_response, user = get_user_from_request(req,'POST')
+    if failure_response:
+        return failure_response
     body = json.loads(req.body.decode("utf-8"))
     item_ids = require(body, "item_ids", "list", err_msg="Missing or error type of [item_ids]")
     project_id = require(body, "project_id", "int", err_msg="Missing or error type of [project_id]")
@@ -978,6 +984,9 @@ def start_excel_pdf(req: HttpRequest):
 
 @CheckRequire
 def end_excel(req: HttpRequest):
+    failure_response, user = get_user_from_request(req,'POST')
+    if failure_response:
+        return failure_response
     # 从请求参数中获取数据
     body = json.loads(req.body.decode("utf-8"))
     item_ids = require(body, "item_ids", "list", err_msg="Missing or error type of [item_ids]")
@@ -1269,6 +1278,9 @@ def end_excel(req: HttpRequest):
 
 @CheckRequire
 def end_excel_pdf(req: HttpRequest):
+    failure_response, user = get_user_from_request(req,'POST')
+    if failure_response:
+        return failure_response
     body = json.loads(req.body.decode("utf-8"))
     item_ids = require(body, "item_ids", "list", err_msg="Missing or error type of [item_ids]")
     project_id = require(body, "project_id", "int", err_msg="Missing or error type of [project_id]")
@@ -1562,6 +1574,9 @@ def end_excel_pdf(req: HttpRequest):
 
 
 def detail_excel(req:HttpRequest):
+    failure_response, user = get_user_from_request(req,'POST')
+    if failure_response:
+        return failure_response
     body = json.loads(req.body.decode("utf-8"))
     item_ids = require(body, "item_ids", "list", err_msg="Missing or error type of [item_ids]")
     # 创建Excel工作簿
@@ -1612,7 +1627,7 @@ def detail_excel(req:HttpRequest):
     current_row = sheet.max_row    
     for cell in sheet[current_row]:
         cell.font = Font(bold=True, size=10)
-        cell.alignment = Alignment(horizontal='center')
+        cell.alignment = Alignment(horizontal='center', vertical='center')
     sheet.row_dimensions[current_row].height = 22.5
     # 获取过滤的Item
     items = Item.objects.filter(id__in=item_ids, if_delete=False)

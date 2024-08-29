@@ -68,9 +68,7 @@ def check_jwt_token(token: str) -> Optional[dict]:
         return None
 
     payload_str = b64url_decode(payload_b64)
-    #TokenBlacklist = apps.get_model('users', 'TokenBlacklist')
-    #if TokenBlacklist.objects.filter(token=token).exists():
-    #    return None  # 令牌无效
+
     # * Check signature
     signature_str_check = header_b64 + "." + payload_b64
     signature_check = hmac.new(SALT, signature_str_check.encode("utf-8"), digestmod=hashlib.sha256).digest()

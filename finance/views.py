@@ -23,11 +23,29 @@ import tempfile
 import subprocess
 import os
 import cn2an
+from datetime import datetime
+import pytz
+
+def convert_utc_to_china_time(utc_time_str):
+    # 将字符串转换为 datetime 对象
+    utc_time = datetime.strptime(utc_time_str, '%Y-%m-%dT%H:%M:%S.%fZ')
+    
+    # 设置时区为 UTC
+    utc_time = utc_time.replace(tzinfo=pytz.utc)
+    
+    # 转换到东八区中国时间
+    china_time = utc_time.astimezone(pytz.timezone('Asia/Shanghai'))
+    
+    # 仅保留日期部分
+    china_date_str = china_time.strftime('%Y-%m-%d')
+    
+    return china_date_str
+
 @CheckRequire
 def advance(req:HttpRequest):
-    # failure_response, user = get_user_from_request(req,'POST')
-    # if failure_response:
-    #     return failure_response
+    failure_response, user = get_user_from_request(req,'POST')
+    if failure_response:
+        return failure_response
     body = json.loads(req.body.decode("utf-8"))
     vehicle_id = require(body,"vehicle_id","int",err_msg="Missing or error type of [vehicle_id]")
     pay_id = require(body,"pay_id","int",err_msg="Missing or error type of [pay_id]")
@@ -42,9 +60,9 @@ def advance(req:HttpRequest):
 
 @CheckRequire
 def del_advance(req:HttpRequest,advance_id):
-    # failure_response, user = get_user_from_request(req,'DELETE')
-    # if failure_response:
-    #     return failure_response
+    failure_response, user = get_user_from_request(req,'DELETE')
+    if failure_response:
+        return failure_response
     advance = Advance.objects.filter(id=advance_id,if_delete=False).first()
     if not advance:
         return request_failed(code=1,info="Advance does not exist",status_code=404)
@@ -54,9 +72,9 @@ def del_advance(req:HttpRequest,advance_id):
 
 @CheckRequire
 def advance_list(req:HttpRequest,per_page,page):
-    # failure_response, user = get_user_from_request(req,'DELETE')
-    # if failure_response:
-    #     return failure_response
+    failure_response, user = get_user_from_request(req,'GET')
+    if failure_response:
+        return failure_response
     driver = req.GET.get('driver',None)
 
     advances = Advance.objects.filter(if_delete=False)
@@ -72,9 +90,9 @@ def advance_list(req:HttpRequest,per_page,page):
 
 @CheckRequire
 def change_advance(req:HttpRequest):
-    # failure_response, user = get_user_from_request(req,'DELETE')
-    # if failure_response:
-    #     return failure_response
+    failure_response, user = get_user_from_request(req,'POST')
+    if failure_response:
+        return failure_response
     body = json.loads(req.body.decode("utf-8"))
     advance_id = require(body,"advance_id","int",err_msg="Missing or error type of [advance_id]")
     advance = Advance.objects.filter(id=advance_id).first()
@@ -115,6 +133,9 @@ def change_advance(req:HttpRequest):
 
 @CheckRequire
 def search4advance(req:HttpRequest,per_page,page):
+    failure_response, user = get_user_from_request(req,'GET')
+    if failure_response:
+        return failure_response
     start_date = req.GET.get('start_date',None)
     end_date = req.GET.get('end_date',None)
     vehicle_id = req.GET.get('vehicle_id',None)
@@ -136,6 +157,9 @@ def search4advance(req:HttpRequest,per_page,page):
 
 @CheckRequire
 def total_amount(req:HttpRequest):
+    failure_response, user = get_user_from_request(req,'GET')
+    if failure_response:
+        return failure_response
     project_owner = req.GET.get('ownerName', None)
     project_id = req.GET.get('project_id', None)
     goods_id = req.GET.get('goods_id', None)
@@ -169,6 +193,9 @@ def total_amount(req:HttpRequest):
 
 @CheckRequire
 def driver_excel(req:HttpRequest):
+    failure_response, user = get_user_from_request(req,'POST')
+    if failure_response:
+        return failure_response
     body = json.loads(req.body.decode("utf-8"))
     start_date = require(body, "start_date", "string", err_msg="Missing or error type of [start_date]")
     end_date = require(body, "end_date", "string", err_msg="Missing or error type of [end_date]")
@@ -179,8 +206,8 @@ def driver_excel(req:HttpRequest):
     # 获取所有items
     items = Item.objects.filter(id__in=item_ids, if_delete=False)
     
-    start_date = start_date.split('T')[0]
-    end_date = end_date.split('T')[0]
+    start_date = convert_utc_to_china_time(start_date).split('T')[0]
+    end_date = convert_utc_to_china_time(end_date).split('T')[0]
 
     # 创建Excel工作簿
     workbook = Workbook()
@@ -208,28 +235,6 @@ def driver_excel(req:HttpRequest):
         sheet.column_dimensions[col_letter].width = width
     
     # 固定的表头信息
-
-    sheet.merge_cells('A1:J1')
-    title_cell = sheet['A1']
-    title_cell.value = "宏途清运司机对账单"
-    title_cell.alignment = Alignment(horizontal='center', vertical='center')
-    title_cell.font = Font(size=16, bold=True)
-
-    sheet.merge_cells('A2:B2')
-    sheet.merge_cells('E2:G2')
-    sheet.merge_cells('H2:J2')
-
-    sheet['A2'] = f"车牌号：{vehicle.license}"
-    sheet['C2'] = f"驾驶员：{vehicle.driver}"
-    sheet['D2'] = f"电话：{vehicle.phone}"
-    sheet['E2'] = f"起始日期：{start_date}"
-    sheet['H2'] = f"截止日期：{end_date}"
-    # 将第一行的字体设置为加粗，居中
-    for row in sheet['A2:J2']:
-        for cell in row:
-            cell.alignment = Alignment(horizontal='center', vertical='center')
-            cell.font = Font(bold=True)
-    
     
 
     headers = ["序号", "日期", "运输起点", "运输终点", "品类", "数量", "单位", "装车方式", "给司机单价", "金额"]
@@ -239,7 +244,6 @@ def driver_excel(req:HttpRequest):
         cell.font = Font(bold=True)
         cell.alignment = Alignment(horizontal='center')
     
-    total_amount = 0.0
     for idx, item in enumerate(items, start=1):
         start_site = Site.objects.filter(id=item.startsite_id).first()
         start_site_name = start_site.name if start_site else "无"
@@ -250,13 +254,13 @@ def driver_excel(req:HttpRequest):
         total_price = item.quantity * item.driverPrice
         row = [
             idx,
-            item.date.split('T')[0],
+            convert_utc_to_china_time(item.date).split('T')[0],
             start_site_name,
             end_site_name,
             goods_name,
             item.quantity,
             item.unit,
-            item.get_load_display(),
+            item.get_load_display() if item.get_load_display() else "无",
             item.driverPrice,
             total_price
         ]
@@ -264,19 +268,8 @@ def driver_excel(req:HttpRequest):
         current_row = sheet.max_row
         for cell in sheet[current_row]:
             cell.alignment = Alignment(horizontal='center', vertical='center')
-        total_amount += total_price
-    if total_amount % 1 == 0:
-        total_amount = int(total_amount)
-    total_cn = cn2an.an2cn(str(total_amount), "rmb")
-    sheet.append([f"总 计 金 额：{total_amount}", "", "","",f"总 计 大 写 (金 额)：{total_cn}"])
-    current_row = sheet.max_row
-    sheet.merge_cells(f'A{current_row}:D{current_row}')
-    sheet.merge_cells(f'E{current_row}:J{current_row}')
-    for cell in sheet[current_row]:
-        cell.alignment = Alignment(horizontal='center', vertical='center')
-        cell.font = Font(bold=True)
-    sheet.row_dimensions[1].height = 25
-    for row in range(2, sheet.max_row + 1):
+   
+    for row in range(1, sheet.max_row + 1):
         sheet.row_dimensions[row].height = 18.5
     local_file_path = "/root/cheliangyunshu/BE-vehicle/test/driver.xlsx"
     workbook.save(local_file_path)
@@ -291,15 +284,19 @@ def driver_excel(req:HttpRequest):
 
 @CheckRequire
 def driver_excel_pdf(req: HttpRequest):
+    failure_response, user = get_user_from_request(req,'POST')
+    if failure_response:
+        return failure_response
     body = json.loads(req.body.decode("utf-8"))
     start_date = require(body, "start_date", "string", err_msg="Missing or error type of [start_date]")
     end_date = require(body, "end_date", "string", err_msg="Missing or error type of [end_date]")
     vehicle_id = require(body, "vehicle_id", "int", err_msg="Missing or error type of [vehicle_id]")
     item_ids = require(body, "item_ids", "list", err_msg="Missing or error type of [item_ids]")
-    
+    items = Item.objects.filter(id__in=item_ids)
     vehicle = Vehicle.objects.filter(id=vehicle_id).first()
-    start_date = start_date.split('T')[0]
-    end_date = end_date.split('T')[0]
+    start_date = convert_utc_to_china_time(start_date).split('T')[0]
+    end_date = convert_utc_to_china_time(end_date).split('T')[0]
+
 
     workbook = Workbook()
     sheet = workbook.active
@@ -367,13 +364,13 @@ def driver_excel_pdf(req: HttpRequest):
         total_price = item.quantity * item.driverPrice
         row = [
             idx,
-            item.date.split('T')[0],
+            convert_utc_to_china_time(item.date).split('T')[0],
             start_site_name,
             end_site_name,
             goods_name,
             item.quantity,
             item.unit,
-            item.get_load_display(),
+            item.get_load_display() if item.get_load_display() else "无",
             item.driverPrice,
             total_price
         ]
@@ -423,9 +420,9 @@ def driver_excel_pdf(req: HttpRequest):
 
 @CheckRequire
 def payment(req:HttpRequest):
-    # failure_response, user = get_user_from_request(req,'POST')
-    # if failure_response:
-    #     return failure_response
+    failure_response, user = get_user_from_request(req,'POST')
+    if failure_response:
+        return failure_response
     body = json.loads(req.body.decode("utf-8"))
     owner = require(body,"owner","string",err_msg="Missing or error type of [owner]")
     date = require(body,"date","string",err_msg="Missing or error type of [date]")
@@ -441,9 +438,9 @@ def payment(req:HttpRequest):
 
 @CheckRequire
 def del_payment(req:HttpRequest,payment_id):
-    # failure_response, user = get_user_from_request(req,'DELETE')
-    # if failure_response:
-    #     return failure_response
+    failure_response, user = get_user_from_request(req,'DELETE')
+    if failure_response:
+        return failure_response
     payment = Payment.objects.filter(id=payment_id,if_delete=False).first()
     if not payment:
         return request_failed(code=1,info="Payment does not exist",status_code=404)
@@ -453,9 +450,9 @@ def del_payment(req:HttpRequest,payment_id):
 
 @CheckRequire
 def payment_list(req:HttpRequest,per_page,page):
-    # failure_response, user = get_user_from_request(req,'DELETE')
-    # if failure_response:
-    #     return failure_response
+    failure_response, user = get_user_from_request(req,'GET')
+    if failure_response:
+        return failure_response
     ownerName = req.GET.get('ownerName',None)
     start_date = req.GET.get('start_date',None)
     end_date = req.GET.get('end_date',None)
@@ -475,9 +472,9 @@ def payment_list(req:HttpRequest,per_page,page):
 
 @CheckRequire
 def change_payment(req:HttpRequest):
-    # failure_response, user = get_user_from_request(req,'DELETE')
-    # if failure_response:
-    #     return failure_response
+    failure_response, user = get_user_from_request(req,'POST')
+    if failure_response:
+        return failure_response
     body = json.loads(req.body.decode("utf-8"))
     payment_id = require(body,"payment_id","int",err_msg="Missing or error type of [payment_id]")
     payment = Payment.objects.filter(id=payment_id).first()
@@ -524,6 +521,9 @@ def change_payment(req:HttpRequest):
 
 @CheckRequire
 def search4payment(req:HttpRequest,per_page,page):
+    failure_response, user = get_user_from_request(req,'GET')
+    if failure_response:
+        return failure_response
     start_date = req.GET.get('start_date',None)
     end_date = req.GET.get('end_date',None)
     owner = req.GET.get('owner',None)
